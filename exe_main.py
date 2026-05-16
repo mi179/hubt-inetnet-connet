@@ -272,7 +272,7 @@ def show_menu(cfg: GlobalConfig) -> int:
 
             return run_watch_loop(cfg)
 
-        # ── 2. 切换账号 ──
+        # ── 2. 切换账号（先下线旧号 → 切换配置 → 上线新号）──
         elif choice == "2":
             ids = cfg.account_ids()
             if not ids:
@@ -293,9 +293,44 @@ def show_menu(cfg: GlobalConfig) -> int:
                     continue
                 idx = int(c) - 1
                 if 0 <= idx < len(ids):
-                    cfg.current_user_id = ids[idx]
+                    new_id = ids[idx]
+
+                    # 如果新账号和当前账号不同，先下线旧号
+                    if new_id != cfg.current_user_id and current:
+                        from cyber_lobster.network_login import logout as eportal_logout
+                        info(f"正在注销旧账号: {current.user_id}...")
+                        r = eportal_logout(host=current.host)
+                        if r.success:
+                            success("旧账号已下线")
+                        else:
+                            warn(f"注销旧账号失败（继续切换）: {r.error}")
+
+                    # 切换配置
+                    cfg.current_user_id = new_id
                     save_config(cfg)
-                    success(f"已切换到: {ids[idx]}")
+                    success(f"已切换到: {new_id}")
+
+                    # 询问是否立即上线
+                    do_login = input("  立即登录新账号？[Y/n]: ").strip().lower()
+                    if do_login in ("", "y", "yes"):
+                        new_account = cfg.get_current_account()
+                        if new_account:
+                            creds = PortalCredentials(
+                                user_id=new_account.user_id,
+                                password=new_account.password,
+                                service=new_account.service,
+                            )
+                            info(f"正在登录新账号: {new_account.user_id}...")
+                            result = login_with_session_retry(
+                                creds, host=new_account.host,
+                                max_session_attempts=1, request_retries=2,
+                            )
+                            if result.success:
+                                success(f"新账号 {new_account.user_id} 上线成功 ✅")
+                                notify_win32("🦞 赛博龙虾守护者", f"已切换账号: {new_account.user_id}")
+                            else:
+                                err = (result.error or result.body[:60]).replace("\n", " ")
+                                warn(f"新账号上线失败: {err}")
                 else:
                     warn("序号无效")
             except (ValueError, IndexError):
