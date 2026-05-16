@@ -97,17 +97,29 @@ def run_setup_wizard() -> AccountConfig | None:
 
 
 def run_watch_loop(cfg: GlobalConfig) -> int:
-    """断网自动重连监控循环。"""
+    """断网自动重连监控 — 实时状态 + Ctrl+B返回/Ctrl+Q退出。"""
     account = cfg.get_current_account()
     if not account:
         error("配置中没有有效账号，请运行 cyber-lobster setup")
         return 1
 
-    info(f"进入监控模式 — {account.user_id} ({SERVICE_NAMES.get(account.service, account.service)})")
-    info(f"检测间隔: {WATCH_INTERVAL}s  |  按 Ctrl+C 退出")
+    svc = SERVICE_NAMES.get(account.service, account.service)
+    _clear_screen()
+    print()
+    print(f"  🦞  cyber-lobster v{__version__}  —  守护监控模式")
+    print(f"  ═══════════════════════════════════════════")
+    print(f"  👤 账号: {account.user_id} ({svc})")
+
+    # 状态栏
+    status_icon = "⏳"
+    status_text = "首次检测..."
+    print(f"  📡 状态: {status_icon} {status_text}")
+    print(f"  ───────────────────────────────────────────")
+    print(f"  [ Ctrl+B 返回菜单 | Ctrl+Q 退出程序 ]")
     print()
 
     fail_count = 0
+    reconnect_count = 0
     creds = PortalCredentials(
         user_id=account.user_id,
         password=account.password,
@@ -115,6 +127,7 @@ def run_watch_loop(cfg: GlobalConfig) -> int:
         query_string=account.query_string,
     )
 
+    import sys as _sys
     try:
         while True:
             try:
@@ -122,16 +135,20 @@ def run_watch_loop(cfg: GlobalConfig) -> int:
             except Exception:
                 online = False
 
+            # 更新状态行（使用 ANSI 光标控制回到行首覆盖）
             if online:
                 if fail_count > 0:
-                    success(f"网络已恢复（之前断连 {fail_count} 次）")
+                    msg = f"✅ 网络已恢复（之前断连 {fail_count} 次，共重连 {reconnect_count} 次）"
                     notify_win32("🦞 赛博龙虾守护者", "校园网已自动重新连通！")
                     fail_count = 0
                 else:
-                    info("网络正常")
+                    msg = "✅ 网络正常"
+                # 覆盖状态行
+                print(f"\r  📡 状态: ✅ 在线 | {_ts()} | {msg}", end="", flush=True)
             else:
                 fail_count += 1
-                warn(f"断连 ({fail_count})，正在重连...")
+                msg = f"❌ 断连 ({fail_count})，正在重连..."
+                print(f"\r  📡 状态: ❌ 断连 | {_ts()} | {msg:<50s}", end="", flush=True)
 
                 try:
                     result = login_with_session_retry(
@@ -139,22 +156,57 @@ def run_watch_loop(cfg: GlobalConfig) -> int:
                         max_session_attempts=1, request_retries=2,
                     )
                     if result.success:
-                        success("重连成功")
+                        reconnect_count += 1
+                        msg = f"✅ 重连成功 (累计 {reconnect_count} 次)"
                         notify_win32("🦞 赛博龙虾守护者", "校园网已自动重新连通！")
                         fail_count = 0
                     else:
                         err = (result.error or result.body[:60]).replace("\n", " ")
-                        warn(f"重连失败: {err}")
+                        msg = f"❌ 重连失败: {err}"
                 except Exception as exc:
-                    warn(f"重连异常: {type(exc).__name__}: {exc}")
+                    msg = f"❌ 异常: {type(exc).__name__}"
+                print(f"\r  📡 状态: {'✅ 在线' if fail_count == 0 else '❌ 断连'} | {_ts()} | {msg:<50s}", end="", flush=True)
 
-            time.sleep(WATCH_INTERVAL)
+            # 每秒检测一次键盘输入，实现非阻塞响应
+            for _ in range(WATCH_INTERVAL):
+                time.sleep(1)
+                # 尝试检测按键（跨平台兼容）
+                try:
+                    if _sys.platform == "win32":
+                        import msvcrt as _m
+                        if _m.kbhit():
+                            k = _m.getch().decode("utf-8", errors="ignore").lower()
+                            if k == "b":
+                                print("\n")
+                                info("返回主菜单")
+                                return 0
+                            elif k == "q":
+                                print("\n")
+                                info("再见 👋")
+                                _sys.exit(0)
+                    else:
+                        import select as _sel
+                        if _sel.select([_sys.stdin], [], [], 0)[0]:
+                            k = _sys.stdin.read(1).lower()
+                            if k == "b":
+                                print("\n")
+                                info("返回主菜单")
+                                return 0
+                            elif k == "q":
+                                print("\n")
+                                info("再见 👋")
+                                _sys.exit(0)
+                except (ImportError, AttributeError, OSError):
+                    pass  # 不支持非阻塞输入则忽略
 
     except KeyboardInterrupt:
-        info("监控已停止，返回主菜单")
+        print("\n")
+        info("返回主菜单")
         return 0
     except Exception as exc:
+        print("\n")
         error(f"意外错误: {type(exc).__name__}: {exc}")
+        input("  按 Enter 返回主菜单...")
         return 1
 
 
