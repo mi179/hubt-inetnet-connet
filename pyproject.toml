@@ -1,6 +1,6 @@
 [project]
 name = "cyber-lobster"
-version = "0.3.0"
+version = "0.4.0"
 description = "Homelab 网络与服务器运维 CLI 工具"
 authors = [{ name = "Your Name" }]
 license = { text = "MIT" }
