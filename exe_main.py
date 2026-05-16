@@ -9,6 +9,7 @@ cyber-lobster EXE 入口 —— 双击即用的校园网自动重连工具。
 
 import sys
 import time
+import random
 import getpass
 from pathlib import Path
 
@@ -157,22 +158,32 @@ def run_watch_loop(cfg: GlobalConfig) -> int:
         return 1
 
 
-# ── ASCII Logo ──
+# ── 多套 Logo 皮肤（随机显示） ──
 
-LOGO = r"""
-     ▄▄▄▄▄▄▄▄▄▄▄  ▄▄▄▄▄▄▄▄▄▄▄  ▄▄▄▄▄▄▄▄▄▄▄  ▄▄▄▄▄▄▄▄▄▄▄
-    ▐░░░░░░░░░░░▌▐░░░░░░░░░░░▌▐░░░░░░░░░░░▌▐░░░░░░░░░░░▌
-    ▐░█▀▀▀▀▀▀▀█░▌▐░█▀▀▀▀▀▀▀▀▀ ▐░█▀▀▀▀▀▀▀▀▀ ▐░█▀▀▀▀▀▀▀█░▌
-    ▐░▌       ▐░▌▐░▌          ▐░▌          ▐░▌       ▐░▌
-    ▐░█▄▄▄▄▄▄▄█░▌▐░█▄▄▄▄▄▄▄▄▄ ▐░█▄▄▄▄▄▄▄▄▄ ▐░▌       ▐░▌
-    ▐░░░░░░░░░░░▌▐░░░░░░░░░░░▌▐░░░░░░░░░░░▌▐░▌       ▐░▌
-    ▐░█▀▀▀▀▀▀▀█░▌ ▀▀▀▀▀▀▀▀▀█░▌ ▀▀▀▀▀▀▀▀▀█░▌▐░▌       ▐░▌
-    ▐░▌       ▐░▌          ▐░▌          ▐░▌▐░▌       ▐░▌
-    ▐░▌       ▐░▌ ▄▄▄▄▄▄▄▄▄█░▌ ▄▄▄▄▄▄▄▄▄█░▌▐░█▄▄▄▄▄▄▄█░▌
-    ▐░▌       ▐░▌▐░░░░░░░░░░░▌▐░░░░░░░░░░░▌▐░░░░░░░░░░░▌
-     ▀         ▀  ▀▀▀▀▀▀▀▀▀▀▀  ▀▀▀▀▀▀▀▀▀▀▀  ▀▀▀▀▀▀▀▀▀▀▀
-           🦞  cyber-lobster  v{version}  —  赛博龙虾守护者
-"""  # noqa
+LOGOS = [
+    # ── 皮肤1: HUBT专属版 ──
+    r""" ██╗  ██╗██╗   ██╗██████╗ ████████╗
+ ██║  ██║██║   ██║██╔══██╗╚══██╔══╝
+ ███████║██║   ██║██████╔╝   ██║   
+ ██╔══██║██║   ██║██╔══██╗   ██║   
+ ██║  ██║╚██████╔╝██████╔╝   ██║   
+ ╚═╝  ╚═╝ ╚═════╝ ╚═════╝    ╚═╝   
+       🦞 Cyber-Lobster v{version} 🦞""",
+
+    # ── 皮肤2: 颜文字老婆版 ──
+    r"""   (\_/)
+  ( •_•)  < 主人，今天的网络也交给我吧！
+  / >🦞""",
+
+    # ── 皮肤3: 赛博机甲龙虾版 ──
+    r"""     / \      / \ 
+    (   )____(   )
+     \  /    \  / 
+      \|  🦞  |/  
+       |      |   
+       \______/   
+  [ CYBER LOBSTER SYSTEM ONLINE ]""",
+]
 
 
 def _clear_screen() -> None:
@@ -195,12 +206,13 @@ def _check_online_status() -> tuple[bool, str]:
 def show_menu(cfg: GlobalConfig) -> int:
     """交互式主菜单（无论有没有配置都显示）。"""
     current = cfg.get_current_account()
+    current_logo = random.choice(LOGOS)
 
     while True:
         _clear_screen()
 
-        # ── Logo ──
-        print(LOGO.format(version=__version__))
+        # ── Logo（随机皮肤）──
+        print(current_logo.format(version=__version__))
         print()
 
         # ── 状态栏 ──
@@ -220,6 +232,7 @@ def show_menu(cfg: GlobalConfig) -> int:
         print(f"     [2]  🔄  切换当前账号")
         print(f"     [3]  ➕  添加新账号")
         print(f"     [4]  🔌  注销下线")
+        print(f"     [5]  🎲  切换界面皮肤")
         print(f"     [0]  ❌  退出程序")
         print()
         print(f"  ───────────────────────────────────")
@@ -320,6 +333,11 @@ def show_menu(cfg: GlobalConfig) -> int:
             input("  按 Enter 返回菜单...")
             continue
 
+        # ── 5. 切换界面皮肤 ──
+        elif choice == "5":
+            current_logo = random.choice(LOGOS)
+            continue
+
         # ── 0. 退出 ──
         elif choice == "0":
             _clear_screen()
@@ -330,7 +348,7 @@ def show_menu(cfg: GlobalConfig) -> int:
             return 0
 
         else:
-            print("  输入无效，请选择 0-4")
+            print("  输入无效，请选择 0-5")
             input("  按 Enter 返回菜单...")
             continue
 
