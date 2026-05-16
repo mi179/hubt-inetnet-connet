@@ -45,7 +45,8 @@ class GlobalConfig:
     auto_auth: bool = True       # 开机/启动时是否自动认证
     auto_start: bool = False     # 是否 Windows 开机自启
     auto_start_id: str = ""      # 开机自启时自动使用的账号（空=不自动进入watch）
-    custom_skins: list[str] = field(default_factory=list)  # 用户自定义 ASCII 皮肤列表
+    current_skin: str = "random"            # 当前皮肤: "random" 或皮肤名
+    custom_skins: dict[str, str] = field(default_factory=dict)  # 用户自定义皮肤 {"名字": "ASCII"}
 
     # ── 便捷方法 ──
 
@@ -109,7 +110,8 @@ def load() -> GlobalConfig:
         auto_auth=raw.get("auto_auth", True),
         auto_start=raw.get("auto_start", False),
         auto_start_id=raw.get("auto_start_id", ""),
-        custom_skins=raw.get("custom_skins", []),
+        current_skin=raw.get("current_skin", "random"),
+        custom_skins=raw.get("custom_skins", {}),
     )
 
 
@@ -123,6 +125,7 @@ def save(cfg: GlobalConfig) -> bool:
                 "auto_auth": cfg.auto_auth,
                 "auto_start": cfg.auto_start,
                 "auto_start_id": cfg.auto_start_id,
+                "current_skin": cfg.current_skin,
                 "custom_skins": cfg.custom_skins,
             }, indent=2, ensure_ascii=False),
             encoding="utf-8",

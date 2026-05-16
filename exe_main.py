@@ -158,11 +158,10 @@ def run_watch_loop(cfg: GlobalConfig) -> int:
         return 1
 
 
-# ── 多套 Logo 皮肤（随机显示） ──
+# ── 外观系统 2.0：内置皮肤库 ──
 
-LOGOS = [
-    # ── 皮肤1: HUBT专属版 ──
-    r""" ██╗  ██╗██╗   ██╗██████╗ ████████╗
+BUILTIN_SKINS: dict[str, str] = {
+    "HUBT 专属版": r""" ██╗  ██╗██╗   ██╗██████╗ ████████╗
  ██║  ██║██║   ██║██╔══██╗╚══██╔══╝
  ███████║██║   ██║██████╔╝   ██║   
  ██╔══██║██║   ██║██╔══██╗   ██║   
@@ -170,20 +169,45 @@ LOGOS = [
  ╚═╝  ╚═╝ ╚═════╝ ╚═════╝    ╚═╝   
        🦞 Cyber-Lobster v{version} 🦞""",
 
-    # ── 皮肤2: 颜文字老婆版 ──
-    r"""   (\_/)
+    "颜文字老婆": r"""   (\_/)
   ( •_•)  < 主人，今天的网络也交给我吧！
   / >🦞""",
 
-    # ── 皮肤3: 赛博机甲龙虾版 ──
-    r"""     / \      / \ 
+    "机甲龙虾": r"""     / \      / \ 
     (   )____(   )
      \  /    \  / 
       \|  🦞  |/  
        |      |   
        \______/   
   [ CYBER LOBSTER SYSTEM ONLINE ]""",
-]
+
+    "初音未来": r"""      oﾟ*｡o
+     /⌒＼_） < Master，初音已接管网络模块喵~
+    /　 　/
+    |　　/
+    ＼_/) 
+  [ HATSUNE MIKU CYBER-LINK ]""",
+
+    "黑客帝国": r"""  01001011 01001111
+  >> WAKE UP, LOBSTER...
+  >> THE MATRIX HAS YOU.""",
+}
+
+
+def get_all_skins(cfg: GlobalConfig) -> dict[str, str]:
+    """合并内置皮肤 + 用户自定义皮肤。"""
+    skins = dict(BUILTIN_SKINS)
+    if cfg.custom_skins:
+        skins.update(cfg.custom_skins)
+    return skins
+
+
+def pick_skin(cfg: GlobalConfig) -> str:
+    """根据配置选择要显示的皮肤 ASCII。"""
+    all_skins = get_all_skins(cfg)
+    if cfg.current_skin == "random" or cfg.current_skin not in all_skins:
+        return random.choice(list(all_skins.values()))
+    return all_skins[cfg.current_skin]
 
 
 def _clear_screen() -> None:
@@ -206,13 +230,14 @@ def _check_online_status() -> tuple[bool, str]:
 def show_menu(cfg: GlobalConfig) -> int:
     """交互式主菜单（无论有没有配置都显示）。"""
     current = cfg.get_current_account()
-    current_logo = random.choice(LOGOS)
+    # 根据 config 选择皮肤
+    current_skin_content = pick_skin(cfg)
 
     while True:
         _clear_screen()
 
-        # ── Logo（随机皮肤）──
-        print(current_logo.format(version=__version__))
+        # ── Logo（根据配置选择皮肤）──
+        print(current_skin_content.format(version=__version__))
         print()
 
         # ── 状态栏 ──
@@ -372,31 +397,91 @@ def show_menu(cfg: GlobalConfig) -> int:
             input("  按 Enter 返回菜单...")
             continue
 
-        # ── 5. 切换界面皮肤 ──
+        # ── 5. 皮肤外观管理子菜单 ──
         elif choice == "5":
-            # 合并内置皮肤 + 自定义皮肤
-            all_skins = list(LOGOS) + (cfg.custom_skins if cfg.custom_skins else [])
-            current_logo = random.choice(all_skins)
-            # 询问是否添加自定义皮肤
-            print()
-            add = input("  是否添加自定义皮肤？[y/N]: ").strip().lower()
-            if add in ("y", "yes"):
-                print("  （粘贴你要的 ASCII 图案，输入完成后在新行输入 .END 结束）")
-                print("  ── 开始粘贴 ──")
-                lines = []
-                try:
-                    while True:
-                        line = input()
-                        if line.strip() == ".END":
-                            break
-                        lines.append(line)
-                except (EOFError, KeyboardInterrupt):
-                    pass
-                if lines:
-                    new_skin = "\n".join(lines)
-                    cfg.custom_skins.append(new_skin)
+            while True:
+                _clear_screen()
+                all_skins = get_all_skins(cfg)
+                mode = "🎲 随机盲盒" if cfg.current_skin == "random" else f"📌 {cfg.current_skin}"
+                print()
+                print("  ╔══════════════════════════════╗")
+                print("  ║   🎨 皮肤外观管理            ║")
+                print(f"  ║   当前模式: {mode:<18s}║")
+                print("  ╚══════════════════════════════╝")
+                print()
+                print(f"     [1] 📝 选择固定皮肤")
+                print(f"     [2] 🎲 开启随机盲盒模式")
+                print(f"     [3] ➕ 导入自定义皮肤")
+                print(f"     [0] ↩  返回主菜单")
+                print()
+                s = input("  请选择: ").strip()
+
+                if s == "1":
+                    # 列出所有可用皮肤
+                    names = list(all_skins.keys())
+                    print()
+                    print("  可选皮肤：")
+                    for i, name in enumerate(names, 1):
+                        mark = " ← 当前" if name == cfg.current_skin else ""
+                        print(f"    {i}. {name}{mark}")
+                    print("    0. 返回")
+                    print()
+                    c = input(f"  选择 (1-{len(names)}): ").strip()
+                    if c == "0" or not c:
+                        continue
+                    try:
+                        idx = int(c) - 1
+                        if 0 <= idx < len(names):
+                            cfg.current_skin = names[idx]
+                            save_config(cfg)
+                            current_skin_content = pick_skin(cfg)
+                            success(f"已固定皮肤: {names[idx]}")
+                        else:
+                            warn("序号无效")
+                    except (ValueError, IndexError):
+                        warn("输入无效")
+                    input("  按 Enter 继续...")
+
+                elif s == "2":
+                    cfg.current_skin = "random"
                     save_config(cfg)
-                    success("自定义皮肤已保存！")
+                    current_skin_content = pick_skin(cfg)
+                    success("已切换为随机盲盒模式 🎲")
+                    input("  按 Enter 继续...")
+
+                elif s == "3":
+                    print()
+                    name = input("  给皮肤起个名字: ").strip()
+                    if not name:
+                        warn("名字不能为空")
+                        input("  按 Enter 继续...")
+                        continue
+                    if name in BUILTIN_SKINS:
+                        warn(f"「{name}」是内置皮肤名，请换个名字")
+                        input("  按 Enter 继续...")
+                        continue
+                    print("  粘贴 ASCII 图案，输入完成后在新行输入 EOF 结束：")
+                    print("  ── 开始粘贴 ──")
+                    lines = []
+                    try:
+                        while True:
+                            line = input()
+                            if line.strip() == "EOF":
+                                break
+                            lines.append(line)
+                    except (EOFError, KeyboardInterrupt):
+                        pass
+                    if lines:
+                        cfg.custom_skins[name] = "\n".join(lines)
+                        save_config(cfg)
+                        success(f"自定义皮肤「{name}」已保存！")
+                    input("  按 Enter 继续...")
+
+                elif s == "0":
+                    break
+                else:
+                    warn("输入无效")
+                    continue
             continue
 
         # ── 6. 开机自启设置 ──
