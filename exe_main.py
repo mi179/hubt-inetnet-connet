@@ -233,6 +233,7 @@ def show_menu(cfg: GlobalConfig) -> int:
         print(f"     [3]  ➕  添加新账号")
         print(f"     [4]  🔌  注销下线")
         print(f"     [5]  🎲  切换界面皮肤")
+        print(f"     [6]  ⚙️  开机自启设置")
         print(f"     [0]  ❌  退出程序")
         print()
         print(f"  ───────────────────────────────────")
@@ -247,26 +248,29 @@ def show_menu(cfg: GlobalConfig) -> int:
                 input("  按 Enter 返回菜单...")
                 continue
 
-            # 若已离线，先尝试登录
+            # 若已离线，根据 auto_auth 决定是否自动认证
             if not online:
-                info("检测到断网，正在尝试登录...")
-                creds = PortalCredentials(
-                    user_id=current.user_id,
-                    password=current.password,
-                    service=current.service,
-                )
-                result = login_with_session_retry(
-                    creds, host=current.host,
-                    max_session_attempts=1, request_retries=2,
-                )
-                if result.success:
-                    success("登录成功！进入守护模式")
-                    notify_win32("🦞 赛博龙虾守护者", "校园网已连通！")
+                if cfg.auto_auth:
+                    info("检测到断网，正在尝试登录...")
+                    creds = PortalCredentials(
+                        user_id=current.user_id,
+                        password=current.password,
+                        service=current.service,
+                    )
+                    result = login_with_session_retry(
+                        creds, host=current.host,
+                        max_session_attempts=1, request_retries=2,
+                    )
+                    if result.success:
+                        success("登录成功！进入守护模式")
+                        notify_win32("🦞 赛博龙虾守护者", "校园网已连通！")
+                    else:
+                        err = (result.error or result.body[:60]).replace("\n", " ")
+                        warn(f"登录失败: {err}")
+                        input("  按 Enter 返回菜单...")
+                        continue
                 else:
-                    err = (result.error or result.body[:60]).replace("\n", " ")
-                    warn(f"登录失败: {err}")
-                    input("  按 Enter 返回菜单...")
-                    continue
+                    warn("自动认证已关闭，跳过登录，直接进入守护模式（断网时将无法自动重连）")
             else:
                 info("网络已连通，直接进入守护模式")
 
@@ -373,6 +377,30 @@ def show_menu(cfg: GlobalConfig) -> int:
             current_logo = random.choice(LOGOS)
             continue
 
+        # ── 6. 开机自启设置 ──
+        elif choice == "6":
+            print()
+            print("  ── 开机自启设置 ──")
+            print()
+            print(f"    当前状态: {'🟢 已开启' if cfg.auto_auth else '🔴 已关闭'} 自动认证")
+            toggle = input(f"    切换自动认证？[Y/n]: ").strip().lower()
+            if toggle in ("", "y", "yes"):
+                cfg.auto_auth = not cfg.auto_auth
+                save_config(cfg)
+                success(f"自动认证已{'开启' if cfg.auto_auth else '关闭'}")
+            print()
+            print("  ── Windows 开机自启 ──")
+            if sys.platform == "win32":
+                do_autostart = input("  设置 cyber-lobster 开机自启？[Y/n]: ").strip().lower()
+                if do_autostart in ("", "y", "yes"):
+                    from cyber_lobster.cli import _setup_autostart_windows
+                    _setup_autostart_windows()
+            else:
+                from cyber_lobster.cli import _setup_autostart_linux
+                _setup_autostart_linux()
+            input("  按 Enter 返回菜单...")
+            continue
+
         # ── 0. 退出 ──
         elif choice == "0":
             _clear_screen()
@@ -383,7 +411,7 @@ def show_menu(cfg: GlobalConfig) -> int:
             return 0
 
         else:
-            print("  输入无效，请选择 0-5")
+            print("  输入无效，请选择 0-6")
             input("  按 Enter 返回菜单...")
             continue
 

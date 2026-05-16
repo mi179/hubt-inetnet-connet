@@ -42,6 +42,7 @@ class GlobalConfig:
     """全局配置（对应 JSON 文件）。"""
     current_user_id: str = ""
     accounts: dict[str, dict] = field(default_factory=dict)
+    auto_auth: bool = True       # 开机/启动时是否自动认证
 
     # ── 便捷方法 ──
 
@@ -102,6 +103,7 @@ def load() -> GlobalConfig:
     return GlobalConfig(
         current_user_id=raw.get("current_user_id", ""),
         accounts=raw.get("accounts", {}),
+        auto_auth=raw.get("auto_auth", True),
     )
 
 
@@ -112,6 +114,7 @@ def save(cfg: GlobalConfig) -> bool:
             json.dumps({
                 "current_user_id": cfg.current_user_id,
                 "accounts": cfg.accounts,
+                "auto_auth": cfg.auto_auth,
             }, indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
