@@ -151,7 +151,7 @@ def run_watch_loop(cfg: GlobalConfig) -> int:
             time.sleep(WATCH_INTERVAL)
 
     except KeyboardInterrupt:
-        info("监控已停止。再见 👋")
+        info("监控已停止，返回主菜单")
         return 0
     except Exception as exc:
         error(f"意外错误: {type(exc).__name__}: {exc}")
@@ -299,7 +299,11 @@ def show_menu(cfg: GlobalConfig) -> int:
             else:
                 info("网络已连通，直接进入守护模式")
 
-            return run_watch_loop(cfg)
+            run_watch_loop(cfg)
+            # Ctrl+C 后返回主菜单
+            info("返回主菜单")
+            input("  按 Enter 继续...")
+            continue
 
         # ── 2. 切换账号（先下线旧号 → 切换配置 → 上线新号）──
         elif choice == "2":
