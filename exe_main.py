@@ -374,7 +374,29 @@ def show_menu(cfg: GlobalConfig) -> int:
 
         # ── 5. 切换界面皮肤 ──
         elif choice == "5":
-            current_logo = random.choice(LOGOS)
+            # 合并内置皮肤 + 自定义皮肤
+            all_skins = list(LOGOS) + (cfg.custom_skins if cfg.custom_skins else [])
+            current_logo = random.choice(all_skins)
+            # 询问是否添加自定义皮肤
+            print()
+            add = input("  是否添加自定义皮肤？[y/N]: ").strip().lower()
+            if add in ("y", "yes"):
+                print("  （粘贴你要的 ASCII 图案，输入完成后在新行输入 .END 结束）")
+                print("  ── 开始粘贴 ──")
+                lines = []
+                try:
+                    while True:
+                        line = input()
+                        if line.strip() == ".END":
+                            break
+                        lines.append(line)
+                except (EOFError, KeyboardInterrupt):
+                    pass
+                if lines:
+                    new_skin = "\n".join(lines)
+                    cfg.custom_skins.append(new_skin)
+                    save_config(cfg)
+                    success("自定义皮肤已保存！")
             continue
 
         # ── 6. 开机自启设置 ──
