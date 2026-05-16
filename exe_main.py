@@ -157,61 +157,122 @@ def run_watch_loop(cfg: GlobalConfig) -> int:
         return 1
 
 
+# ── ASCII Logo ──
+
+LOGO = r"""
+     ▄▄▄▄▄▄▄▄▄▄▄  ▄▄▄▄▄▄▄▄▄▄▄  ▄▄▄▄▄▄▄▄▄▄▄  ▄▄▄▄▄▄▄▄▄▄▄
+    ▐░░░░░░░░░░░▌▐░░░░░░░░░░░▌▐░░░░░░░░░░░▌▐░░░░░░░░░░░▌
+    ▐░█▀▀▀▀▀▀▀█░▌▐░█▀▀▀▀▀▀▀▀▀ ▐░█▀▀▀▀▀▀▀▀▀ ▐░█▀▀▀▀▀▀▀█░▌
+    ▐░▌       ▐░▌▐░▌          ▐░▌          ▐░▌       ▐░▌
+    ▐░█▄▄▄▄▄▄▄█░▌▐░█▄▄▄▄▄▄▄▄▄ ▐░█▄▄▄▄▄▄▄▄▄ ▐░▌       ▐░▌
+    ▐░░░░░░░░░░░▌▐░░░░░░░░░░░▌▐░░░░░░░░░░░▌▐░▌       ▐░▌
+    ▐░█▀▀▀▀▀▀▀█░▌ ▀▀▀▀▀▀▀▀▀█░▌ ▀▀▀▀▀▀▀▀▀█░▌▐░▌       ▐░▌
+    ▐░▌       ▐░▌          ▐░▌          ▐░▌▐░▌       ▐░▌
+    ▐░▌       ▐░▌ ▄▄▄▄▄▄▄▄▄█░▌ ▄▄▄▄▄▄▄▄▄█░▌▐░█▄▄▄▄▄▄▄█░▌
+    ▐░▌       ▐░▌▐░░░░░░░░░░░▌▐░░░░░░░░░░░▌▐░░░░░░░░░░░▌
+     ▀         ▀  ▀▀▀▀▀▀▀▀▀▀▀  ▀▀▀▀▀▀▀▀▀▀▀  ▀▀▀▀▀▀▀▀▀▀▀
+           🦞  cyber-lobster  v{version}  —  赛博龙虾守护者
+"""  # noqa
+
+
+def _clear_screen() -> None:
+    """清屏（跨平台）。"""
+    import os as _os
+    _os.system("cls" if sys.platform == "win32" else "clear")
+
+
+def _check_online_status() -> tuple[bool, str]:
+    """检测网络状态，返回 (是否在线, 状态描述)。"""
+    try:
+        ok = check_connectivity(timeout=2.0)
+    except Exception:
+        ok = False
+    if ok:
+        return (True, "✅ 外网连通")
+    return (False, "❌ 外网断开")
+
+
 def show_menu(cfg: GlobalConfig) -> int:
-    """交互主菜单（有配置时显示）。"""
+    """交互式主菜单（无论有没有配置都显示）。"""
+    current = cfg.get_current_account()
+
     while True:
-        current = cfg.get_current_account()
-        current_name = f"{current.user_id} ({SERVICE_NAMES.get(current.service, current.service)})" if current else "（无）"
+        _clear_screen()
 
-        print()
-        print(f"  ╔══════════════════════════════╗")
-        print(f"  ║  🦞  cyber-lobster v{__version__:<11s}║")
-        print(f"  ║  当前账号: {current_name:<19s}║")
-        print(f"  ╠══════════════════════════════╣")
-        print(f"  ║  1.  ▶ 启动监控              ║")
-        print(f"  ║  2.  ✎ 配置向导              ║")
-        print(f"  ║  3.  ⇄ 切换账号              ║")
-        print(f"  ║  4.  ⏻ 注销下线              ║")
-        print(f"  ║  5.  ⚡ 开机自启              ║")
-        print(f"  ║  0.  ✕ 退出                  ║")
-        print(f"  ╚══════════════════════════════╝")
+        # ── Logo ──
+        print(LOGO.format(version=__version__))
         print()
 
-        choice = input("  请选择 [1]: ").strip()
+        # ── 状态栏 ──
+        online, status_text = _check_online_status()
+        if current:
+            svc = SERVICE_NAMES.get(current.service, current.service)
+            print(f"  📡 网络状态:  {status_text}")
+            print(f"  👤 当前账号:  {current.user_id} ({svc})")
+        else:
+            print(f"  📡 网络状态:  {status_text}")
+            print(f"  👤 当前账号:  （无 — 请先添加账号）")
+        print(f"  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        print()
 
-        # ── 1. 启动监控 ──
+        # ── 菜单选项 ──
+        print(f"     [1]  🚀  一键连网并进入守护挂机模式")
+        print(f"     [2]  🔄  切换当前账号")
+        print(f"     [3]  ➕  添加新账号")
+        print(f"     [4]  🔌  注销下线")
+        print(f"     [0]  ❌  退出程序")
+        print()
+        print(f"  ───────────────────────────────────")
+        print()
+
+        choice = input(f"  请输入选项 [1]: ").strip()
+
+        # ── 1. 一键连网 + 守护挂机 ──
         if not choice or choice == "1":
             if not current:
-                warn("没有默认账号，请先运行配置向导")
+                warn("没有可用账号，请先 [3] 添加新账号")
                 input("  按 Enter 返回菜单...")
                 continue
+
+            # 若已离线，先尝试登录
+            if not online:
+                info("检测到断网，正在尝试登录...")
+                creds = PortalCredentials(
+                    user_id=current.user_id,
+                    password=current.password,
+                    service=current.service,
+                )
+                result = login_with_session_retry(
+                    creds, host=current.host,
+                    max_session_attempts=1, request_retries=2,
+                )
+                if result.success:
+                    success("登录成功！进入守护模式")
+                    notify_win32("🦞 赛博龙虾守护者", "校园网已连通！")
+                else:
+                    err = (result.error or result.body[:60]).replace("\n", " ")
+                    warn(f"登录失败: {err}")
+                    input("  按 Enter 返回菜单...")
+                    continue
+            else:
+                info("网络已连通，直接进入守护模式")
+
             return run_watch_loop(cfg)
 
-        # ── 2. 配置向导 ──
+        # ── 2. 切换账号 ──
         elif choice == "2":
-            account = run_setup_wizard()
-            if account:
-                cfg.upsert_account(account)
-                save_config(cfg)
-                success(f"配置已保存 → {config_path()}")
-                # 保存后直接进监控
-                return run_watch_loop(cfg)
-            input("  按 Enter 返回菜单...")
-            continue
-
-        # ── 3. 切换账号 ──
-        elif choice == "3":
             ids = cfg.account_ids()
             if not ids:
-                warn("没有已保存的账号")
+                warn("没有已保存的账号，请先 [3] 添加")
                 input("  按 Enter 返回菜单...")
                 continue
+
             print()
-            print("  已保存的账号：")
+            print("  ── 已保存的账号 ──")
             for i, uid in enumerate(ids, 1):
                 mark = " ← 当前" if uid == cfg.current_user_id else ""
-                print(f"  {i}. {uid}{mark}")
-            print("  0. 返回")
+                print(f"    {i}. {uid}{mark}")
+            print("    0. 返回")
             print()
             try:
                 c = input(f"  选择账号 (1-{len(ids)}): ").strip()
@@ -222,67 +283,60 @@ def show_menu(cfg: GlobalConfig) -> int:
                     cfg.current_user_id = ids[idx]
                     save_config(cfg)
                     success(f"已切换到: {ids[idx]}")
-                    input("  按 Enter 返回菜单...")
-                    continue
+                else:
+                    warn("序号无效")
             except (ValueError, IndexError):
-                pass
-            warn("输入无效")
+                warn("输入无效")
+            input("  按 Enter 返回菜单...")
+            continue
+
+        # ── 3. 添加新账号 ──
+        elif choice == "3":
+            account = run_setup_wizard()
+            if account:
+                cfg.upsert_account(account)
+                save_config(cfg)
+                success(f"账号已保存 → {config_path()}")
+                # 自动刷新当前用户
+                current = cfg.get_current_account()
+            input("  按 Enter 返回菜单...")
             continue
 
         # ── 4. 注销下线 ──
         elif choice == "4":
+            if not current:
+                warn("没有账号可注销")
+                input("  按 Enter 返回菜单...")
+                continue
+
             from cyber_lobster.network_login import logout as eportal_logout
-            host = current.host if current else "172.16.54.18"
-            info(f"正在向 {host} 发送注销...")
-            r = eportal_logout(host=host)
+            info(f"正在向 {current.host} 发送注销...")
+            r = eportal_logout(host=current.host)
             if r.success:
-                success("已注销下线")
+                success("已注销下线 ✅")
+                notify_win32("🦞 赛博龙虾守护者", "已成功注销下线")
             else:
                 warn(f"注销失败: {r.error}")
             input("  按 Enter 返回菜单...")
             continue
 
-        # ── 5. 开机自启 ──
-        elif choice == "5":
-            from cyber_lobster.cli import cmd_autostart
-            import argparse
-            cmd_autostart(argparse.Namespace())
-            print()
-            input("  按 Enter 返回菜单...")
-            continue
-
         # ── 0. 退出 ──
         elif choice == "0":
-            info("再见 👋")
+            _clear_screen()
+            print()
+            print(f"  🦞  cyber-lobster v{__version__}")
+            print(f"  再见 👋  校园网一路畅通！")
+            print()
             return 0
 
         else:
-            print("  输入无效，请选择 0-5")
+            print("  输入无效，请选择 0-4")
+            input("  按 Enter 返回菜单...")
+            continue
 
 
 def main() -> int:
-    print()
-    print(f"  🦞  cyber-lobster v{__version__}  —  校园网自动重连")
-    print(f"  ═══════════════════════════════")
-    print(f"  配置: {config_path()}")
-    print()
-
     cfg = load_config()
-
-    if not cfg.has_accounts():
-        info("没有找到已保存的配置")
-
-        account = run_setup_wizard()
-        if account is None:
-            return 1
-
-        # 保存并进入监控
-        cfg.upsert_account(account)
-        save_config(cfg)
-        success(f"配置已保存 → {config_path()}")
-        return run_watch_loop(cfg)
-
-    # 已有配置 → 显示主菜单
     return show_menu(cfg)
 
 
