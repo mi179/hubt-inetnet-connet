@@ -157,10 +157,115 @@ def run_watch_loop(cfg: GlobalConfig) -> int:
         return 1
 
 
+def show_menu(cfg: GlobalConfig) -> int:
+    """交互主菜单（有配置时显示）。"""
+    while True:
+        current = cfg.get_current_account()
+        current_name = f"{current.user_id} ({SERVICE_NAMES.get(current.service, current.service)})" if current else "（无）"
+
+        print()
+        print(f"  ╔══════════════════════════════╗")
+        print(f"  ║  🦞  cyber-lobster v{__version__:<11s}║")
+        print(f"  ║  当前账号: {current_name:<19s}║")
+        print(f"  ╠══════════════════════════════╣")
+        print(f"  ║  1.  ▶ 启动监控              ║")
+        print(f"  ║  2.  ✎ 配置向导              ║")
+        print(f"  ║  3.  ⇄ 切换账号              ║")
+        print(f"  ║  4.  ⏻ 注销下线              ║")
+        print(f"  ║  5.  ⚡ 开机自启              ║")
+        print(f"  ║  0.  ✕ 退出                  ║")
+        print(f"  ╚══════════════════════════════╝")
+        print()
+
+        choice = input("  请选择 [1]: ").strip()
+
+        # ── 1. 启动监控 ──
+        if not choice or choice == "1":
+            if not current:
+                warn("没有默认账号，请先运行配置向导")
+                input("  按 Enter 返回菜单...")
+                continue
+            return run_watch_loop(cfg)
+
+        # ── 2. 配置向导 ──
+        elif choice == "2":
+            account = run_setup_wizard()
+            if account:
+                cfg.upsert_account(account)
+                save_config(cfg)
+                success(f"配置已保存 → {config_path()}")
+                # 保存后直接进监控
+                return run_watch_loop(cfg)
+            input("  按 Enter 返回菜单...")
+            continue
+
+        # ── 3. 切换账号 ──
+        elif choice == "3":
+            ids = cfg.account_ids()
+            if not ids:
+                warn("没有已保存的账号")
+                input("  按 Enter 返回菜单...")
+                continue
+            print()
+            print("  已保存的账号：")
+            for i, uid in enumerate(ids, 1):
+                mark = " ← 当前" if uid == cfg.current_user_id else ""
+                print(f"  {i}. {uid}{mark}")
+            print("  0. 返回")
+            print()
+            try:
+                c = input(f"  选择账号 (1-{len(ids)}): ").strip()
+                if c == "0" or not c:
+                    continue
+                idx = int(c) - 1
+                if 0 <= idx < len(ids):
+                    cfg.current_user_id = ids[idx]
+                    save_config(cfg)
+                    success(f"已切换到: {ids[idx]}")
+                    input("  按 Enter 返回菜单...")
+                    continue
+            except (ValueError, IndexError):
+                pass
+            warn("输入无效")
+            continue
+
+        # ── 4. 注销下线 ──
+        elif choice == "4":
+            from cyber_lobster.network_login import logout as eportal_logout
+            host = current.host if current else "172.16.54.18"
+            info(f"正在向 {host} 发送注销...")
+            r = eportal_logout(host=host)
+            if r.success:
+                success("已注销下线")
+            else:
+                warn(f"注销失败: {r.error}")
+            input("  按 Enter 返回菜单...")
+            continue
+
+        # ── 5. 开机自启 ──
+        elif choice == "5":
+            from cyber_lobster.cli import cmd_autostart
+            import argparse
+            cmd_autostart(argparse.Namespace())
+            print()
+            input("  按 Enter 返回菜单...")
+            continue
+
+        # ── 0. 退出 ──
+        elif choice == "0":
+            info("再见 👋")
+            return 0
+
+        else:
+            print("  输入无效，请选择 0-5")
+
+
 def main() -> int:
+    print()
     print(f"  🦞  cyber-lobster v{__version__}  —  校园网自动重连")
-    print(f"  ═══════════════════════════════════════════")
+    print(f"  ═══════════════════════════════")
     print(f"  配置: {config_path()}")
+    print()
 
     cfg = load_config()
 
@@ -177,11 +282,8 @@ def main() -> int:
         success(f"配置已保存 → {config_path()}")
         return run_watch_loop(cfg)
 
-    # 已有配置 → 直接进入监控
-    current = cfg.get_current_account()
-    if current:
-        info(f"已加载配置: {current.user_id}")
-    return run_watch_loop(cfg)
+    # 已有配置 → 显示主菜单
+    return show_menu(cfg)
 
 
 def entry_point() -> int:
