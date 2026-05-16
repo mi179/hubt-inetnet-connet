@@ -379,26 +379,92 @@ def show_menu(cfg: GlobalConfig) -> int:
 
         # ── 6. 开机自启设置 ──
         elif choice == "6":
-            print()
-            print("  ── 开机自启设置 ──")
-            print()
-            print(f"    当前状态: {'🟢 已开启' if cfg.auto_auth else '🔴 已关闭'} 自动认证")
-            toggle = input(f"    切换自动认证？[Y/n]: ").strip().lower()
-            if toggle in ("", "y", "yes"):
-                cfg.auto_auth = not cfg.auto_auth
-                save_config(cfg)
-                success(f"自动认证已{'开启' if cfg.auto_auth else '关闭'}")
-            print()
-            print("  ── Windows 开机自启 ──")
-            if sys.platform == "win32":
-                do_autostart = input("  设置 cyber-lobster 开机自启？[Y/n]: ").strip().lower()
-                if do_autostart in ("", "y", "yes"):
-                    from cyber_lobster.cli import _setup_autostart_windows
-                    _setup_autostart_windows()
-            else:
-                from cyber_lobster.cli import _setup_autostart_linux
-                _setup_autostart_linux()
-            input("  按 Enter 返回菜单...")
+            while True:
+                _clear_screen()
+                print()
+                print("  ╔══════════════════════════════╗")
+                print("  ║    ⚙️  开机自启设置          ║")
+                print("  ╚══════════════════════════════╝")
+                print()
+
+                # 状态总览
+                auto_auth_st = "🟢 开启" if cfg.auto_auth else "🔴 关闭"
+                auto_start_st = "🟢 已启" if cfg.auto_start else "🔴 关闭"
+                start_acct = cfg.auto_start_id or "（未设置）"
+
+                print(f"    1.  自动认证        {auto_auth_st}")
+                print(f"    2.  Windows 开机自启 {auto_start_st}")
+                print(f"    3.  开机启动账号    {start_acct}")
+                print(f"    0.  ↩ 返回主菜单")
+                print()
+                s = input("  请选择: ").strip()
+
+                if s == "1":
+                    cfg.auto_auth = not cfg.auto_auth
+                    save_config(cfg)
+                    success(f"自动认证已{'开启' if cfg.auto_auth else '关闭'}")
+                    input("  按 Enter 继续...")
+
+                elif s == "2":
+                    if sys.platform == "win32":
+                        if not cfg.auto_start:
+                            from cyber_lobster.cli import _setup_autostart_windows
+                            ok = _setup_autostart_windows()
+                            if ok == 0:
+                                cfg.auto_start = True
+                                save_config(cfg)
+                                success("开机自启已开启 ✅")
+                        else:
+                            import subprocess as _sp
+                            startup_dir = Path(os.environ.get('APPDATA', '')) / 'Microsoft' / 'Windows' / 'Start Menu' / 'Programs' / 'Startup'
+                            bat = startup_dir / 'cyber-lobster.bat'
+                            if bat.exists():
+                                bat.unlink()
+                            # 同时移除已创建的快捷方式
+                            cfg.auto_start = False
+                            save_config(cfg)
+                            success("开机自启已关闭 ✅ (已删除启动脚本)")
+                    else:
+                        from cyber_lobster.cli import _setup_autostart_linux
+                        _setup_autostart_linux()
+                    input("  按 Enter 继续...")
+
+                elif s == "3":
+                    ids = cfg.account_ids()
+                    if not ids:
+                        warn("没有已保存的账号，请先添加")
+                        input("  按 Enter 继续...")
+                        continue
+                    print()
+                    print("  选择开机时自动启动的账号：")
+                    for i, uid in enumerate(ids, 1):
+                        mark = " ← 当前" if uid == cfg.auto_start_id else ""
+                        print(f"    {i}. {uid}{mark}")
+                    print("    0.  不自动启动")
+                    print()
+                    c = input(f"  选择 (0-{len(ids)}): ").strip()
+                    if c == "0":
+                        cfg.auto_start_id = ""
+                        cfg.auto_start = False
+                        save_config(cfg)
+                        success("已取消开机自动启动")
+                    else:
+                        try:
+                            idx = int(c) - 1
+                            if 0 <= idx < len(ids):
+                                cfg.auto_start_id = ids[idx]
+                                cfg.auto_start = True
+                                save_config(cfg)
+                                success(f"开机将自动启动账号: {ids[idx]}")
+                        except (ValueError, IndexError):
+                            warn("输入无效")
+                    input("  按 Enter 继续...")
+
+                elif s == "0":
+                    break
+                else:
+                    warn("输入无效")
+                    continue
             continue
 
         # ── 0. 退出 ──
@@ -424,10 +490,26 @@ def main() -> int:
 def entry_point() -> int:
     """统一入口：有参数走 CLI，无参数走自动流。"""
     if len(sys.argv) > 1:
-        # 有命令行参数 → 交给 cli.py 处理
         from cyber_lobster.cli import main as cli_main
         return cli_main()
-    # 无参数 → 双击自动流
+
+    # 无参数 → 检查是否配置了开机自启账号
+    cfg = load_config()
+    if cfg.auto_start_id and cfg.auto_start:
+        # 找到对应账号直接进入 watch
+        acct = cfg.accounts.get(cfg.auto_start_id)
+        if acct:
+            from cyber_lobster.network_login import PortalCredentials as PC
+            creds = PC(
+                user_id=acct.get("user_id", cfg.auto_start_id),
+                password=acct.get("password", ""),
+                service=acct.get("service", "DX"),
+            )
+            host = acct.get("host", DEFAULT_HOST)
+            info(f"开机自启: 自动进入守护模式 — {cfg.auto_start_id}")
+            return run_watch_loop(cfg)
+
+    # 否则 → 显示主菜单
     return main()
 
 

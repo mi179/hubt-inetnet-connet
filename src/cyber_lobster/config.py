@@ -43,6 +43,8 @@ class GlobalConfig:
     current_user_id: str = ""
     accounts: dict[str, dict] = field(default_factory=dict)
     auto_auth: bool = True       # 开机/启动时是否自动认证
+    auto_start: bool = False     # 是否 Windows 开机自启
+    auto_start_id: str = ""      # 开机自启时自动使用的账号（空=不自动进入watch）
 
     # ── 便捷方法 ──
 
@@ -104,6 +106,8 @@ def load() -> GlobalConfig:
         current_user_id=raw.get("current_user_id", ""),
         accounts=raw.get("accounts", {}),
         auto_auth=raw.get("auto_auth", True),
+        auto_start=raw.get("auto_start", False),
+        auto_start_id=raw.get("auto_start_id", ""),
     )
 
 
@@ -115,6 +119,8 @@ def save(cfg: GlobalConfig) -> bool:
                 "current_user_id": cfg.current_user_id,
                 "accounts": cfg.accounts,
                 "auto_auth": cfg.auto_auth,
+                "auto_start": cfg.auto_start,
+                "auto_start_id": cfg.auto_start_id,
             }, indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
