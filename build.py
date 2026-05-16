@@ -84,6 +84,7 @@ def main():
         "--hidden-import", "charset_normalizer",
         "--hidden-import", "certifi",
         "--hidden-import", "idna",
+        "--hidden-import", "msvcrt",
         "exe_main.py",
     ]
 

@@ -174,10 +174,9 @@ def run_watch_loop(cfg: GlobalConfig) -> int:
                     msg = f"❌ 异常: {type(exc).__name__}"
                 print(f"\r  📡 状态: {'✅ 在线' if fail_count == 0 else '❌ 断连'} | {_ts()} | {msg:<50s}", end="", flush=True)
 
-            # 每秒检测一次键盘输入，实现非阻塞响应
+            # 分秒等待 + 检测键盘（按 B 返回菜单，按 Q 退出）
             for _ in range(WATCH_INTERVAL):
                 time.sleep(1)
-                # 尝试检测按键（跨平台兼容）
                 try:
                     if _sys.platform == "win32":
                         import msvcrt as _m
@@ -203,8 +202,8 @@ def run_watch_loop(cfg: GlobalConfig) -> int:
                                 print("\n")
                                 info("再见 👋")
                                 _sys.exit(0)
-                except (ImportError, AttributeError, OSError):
-                    pass  # 不支持非阻塞输入则忽略
+                except Exception:
+                    pass
 
     except KeyboardInterrupt:
         print("\n")
@@ -358,10 +357,8 @@ def show_menu(cfg: GlobalConfig) -> int:
             else:
                 info("网络已连通，直接进入守护模式")
 
-            run_watch_loop(cfg)
-            # Ctrl+C 后返回主菜单
-            info("返回主菜单")
-            input("  按 Enter 继续...")
+            # 监控模式返回后直接刷新菜单（Ctrl+C / B 键都不用额外回车）
+            print()
             continue
 
         # ── 2. 切换账号（先下线旧号 → 切换配置 → 上线新号）──
