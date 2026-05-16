@@ -1,17 +1,19 @@
 """
 校园网 ePortal 自动登录模块。
 
-实现基于 requests 会话的认证流程，支持：
+实现基于 requests 会话的完整认证流程：
+  - 自动获取 RSA 公钥（pageInfo API）
+  - 客户端加密密码（反转 → RSA-1024，与浏览器 JS 一致）
   - Cookie 管理（自动跟踪 JSESSIONID）
-  - 请求级别重试（指数退避）
-  - 会话级别重试（整体重建）
-  - 响应错误捕获与日志
+  - 请求级 / 会话级重试 + 指数退避
 
-用法见底部 __main__ 示例，或在 cli.py 中通过 login 子命令调用。
+直接从 `cyber-lobster login --from-config` 调用。
 """
 
-import time
+import json
 import logging
+import re
+import time
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -35,15 +37,23 @@ USER_AGENT = (
     "Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0"
 )
 
+# 已加密的密码 hash 是 256 位 hex（1024-bit RSA 输出）
+RE_ENCRYPTED_HASH = re.compile(r"^[0-9a-f]{256}$")
+
 
 # ── 数据结构 ──────────────────────────────────────────────
 
 @dataclass
 class PortalCredentials:
-    """ePortal 认证凭据。"""
+    """ePortal 认证凭据。
+
+    注意:
+        password 可以填原始密码（明文），登录时会自动 RSA 加密；
+        也可以填已加密的 256 位 hex hash（跳过加密步骤）。
+    """
 
     user_id: str                                   # 学号
-    password: str                                  # 客户端加密后的密码 hash
+    password: str                                  # 明文密码 或 已加密 hash
     service: str = DEFAULT_SERVICE                 # 运营商
     query_string: str = ""                         # 原请求中的 queryString
     operator_pwd: str = ""
@@ -61,6 +71,153 @@ class LoginResult:
     error: str = ""
 
 
+# ── RSA 加密（与浏览器 JS 行为一致） ──
+
+def fetch_public_key(
+    host: str,
+    query_string: str,
+    session: Optional[requests.Session] = None,
+    timeout: int = 10,
+) -> dict:
+    """调用 pageInfo 接口获取 RSA 公钥。
+
+    返回:
+        {"publicKeyExponent": "10001",
+         "publicKeyModulus": "<256-hex-char>"}
+    失败时返回空 dict。
+    """
+    url = f"http://{host}/eportal/InterFace.do?method=pageInfo"
+    data = {"queryString": query_string}
+
+    own_session = False
+    if session is None:
+        session = requests.Session()
+        own_session = True
+
+    try:
+        resp = session.post(url, data=data, timeout=timeout)
+        if resp.status_code == 200 and resp.text:
+            info = resp.json()
+            exp = info.get("publicKeyExponent", "")
+            mod = info.get("publicKeyModulus", "")
+            if exp and mod:
+                logger.info("✅ 获取 RSA 公钥成功")
+                return {"publicKeyExponent": exp, "publicKeyModulus": mod}
+    except Exception as exc:
+        logger.warning("获取公钥失败: %s", exc)
+
+    return {}
+
+
+def rsa_encrypt_password(password: str, modulus_hex: str, exponent_hex: str = "10001") -> str:
+    """模拟浏览器 JS 的 RSA 加密流程。
+
+    步骤:
+      1. 密码反转:  password -> password[::-1]
+      2. 取 charCode 得到字节数组
+      3. 补零至 chunkSize (2 * (位数 - 1))
+      4. 按小端序组装为大整数
+      5. m^e mod n
+      6. 输出 hex 字符串
+
+    参数:
+        password:     原始密码（明文）
+        modulus_hex:  公钥 modulus（hex）
+        exponent_hex: 公钥 exponent（hex，通常 10001）
+
+    返回:
+        密文 hex 字符串（不含空格），约 256 字符。
+    """
+    # 1. 反转
+    rev = password[::-1]  # 与 JS: password.split("").reverse().join("") 一致
+
+    # 2. charCode → 字节数组（JS charCodeAt 对 ASCII 返回 [0,127]）
+    raw_bytes = rev.encode("utf-8", errors="replace")
+
+    # 3. 计算 chunkSize（与 JS RSAKeyPair 构造函数一致）
+    #    JS: biFromHex → BigInt  digits[] 是 16-bit 小端序
+    #    modulus 有 N 个 digit → biHighIndex = N-1
+    #    chunkSize = 2 * biHighIndex
+    mod_digits = (len(modulus_hex) + 3) // 4  # 每 4 hex chars = 1 digit
+    bi_high_index = mod_digits - 1
+    # 但 biHighIndex 返回的是最高非零 digit 索引，
+    # 对于满 1024-bit key，就是 N-1。
+    # 安全起见也检查一下实际最高非零值的位置
+    for i in range(bi_high_index, -1, -1):
+        start = max(0, len(modulus_hex) - (i + 1) * 4)
+        chunk = modulus_hex[start: start + 4]
+        if int(chunk, 16) != 0:
+            bi_high_index = i
+            break
+
+    chunk_size = 2 * bi_high_index
+
+    # 补零至 chunk_size 字节
+    if len(raw_bytes) > chunk_size:
+        logger.warning("密码过长（%d > %d），将被截断", len(raw_bytes), chunk_size)
+        raw_bytes = raw_bytes[:chunk_size]
+    padded = raw_bytes + b"\x00" * (chunk_size - len(raw_bytes))
+
+    # 4. 小端序 → 大整数（匹配 JS digit 排列）
+    m = int.from_bytes(padded, "little")
+
+    # 5. RSA 加密
+    e = int(exponent_hex, 16)
+    n = int(modulus_hex, 16)
+    c = pow(m, e, n)
+
+    # 6. hex 输出（小写，无 0x 前缀）
+    cipher_hex = format(c, "x")
+
+    # 补充前导零到 256 字符（JS biToHex 的行为）
+    expected_len = len(modulus_hex)
+    if len(cipher_hex) < expected_len:
+        cipher_hex = cipher_hex.zfill(expected_len)
+
+    return cipher_hex
+
+
+def ensure_encrypted_password(
+    creds: PortalCredentials,
+    host: str,
+    query_string: str = "",
+    session: Optional[requests.Session] = None,
+) -> str:
+    """确保 password 是已加密的 hash。
+
+    - 如果 `creds.password` 已经是 256 位 hex → 直接返回
+    - 否则 → 获取公钥 → RSA 加密 → 返回 hex
+    """
+    pwd = creds.password.strip()
+    if RE_ENCRYPTED_HASH.match(pwd):
+        logger.info("密码已是加密 hash，跳过 RSA")
+        return pwd
+
+    qs = query_string or creds.query_string
+    if not qs:
+        logger.info("🔍 queryString 为空，自动检测中...")
+        qs = detect_query_string()
+    if not qs:
+        logger.warning("⚠ 自动检测失败，回退默认值")
+        qs = (
+            "wlanuserip%3D10.9.213.248"
+            "%26wlanacname%3Dlogic"
+            "%26nasip%3D10.253.0.17"
+            "%26wlanparameter%3D50-bb-b5-db-26-36"
+            "%26url%3Dhttp%3A%2F%2Fwww.baidu.com%2F"
+            "%26userlocation%3Dethtrunk%2F3%3A3960.0"
+        )
+
+    key = fetch_public_key(host, qs, session=session)
+    if not key:
+        raise RuntimeError("无法获取 RSA 公钥，登录失败")
+
+    logger.info("🔐 RSA 加密密码中...")
+    encrypted = rsa_encrypt_password(pwd, key["publicKeyModulus"], key["publicKeyExponent"])
+    logger.debug("加密结果: %s...", encrypted[:32])
+    return encrypted
+
+
 # ── Session 工厂 ──
 
 def create_session(retries: int = DEFAULT_MAX_RETRIES,
@@ -68,7 +225,6 @@ def create_session(retries: int = DEFAULT_MAX_RETRIES,
     """创建带连接级重试的 requests Session。"""
     session = requests.Session()
 
-    # 连接级自动重试（应对临时网络闪断）
     retry_strategy = Retry(
         total=retries,
         backoff_factor=backoff,
@@ -79,7 +235,6 @@ def create_session(retries: int = DEFAULT_MAX_RETRIES,
     session.mount("http://", adapter)
     session.mount("https://", adapter)
 
-    # 通用请求头
     session.headers.update({
         "Accept": "*/*",
         "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6",
@@ -102,38 +257,35 @@ def prepare_session(session: requests.Session,
 def inject_cookies(session: requests.Session,
                    host: str,
                    username: str = "",
-                   password: str = "",
-                   server: str = "LT",
-                   server_name: str = "联通",
-                   user_group: str = "工程技术学院学生") -> None:
-    """注入 ePortal 前端记住的 Cookie（可选，部分 portal 需要）。"""
+                   password: str = "") -> None:
+    """注入 ePortal 前端 Cookie（不含中文值，避免 latin-1 编码崩溃）。"""
     jar = {
         "EPORTAL_COOKIE_OPERATORPWD": "",
         "EPORTAL_COOKIE_DOMAIN": "true",
         "EPORTAL_COOKIE_SAVEPASSWORD": "true",
         "EPORTAL_COOKIE_NEWV": "true",
         "EPORTAL_AUTO_LAND": "",
-        "EPORTAL_COOKIE_SERVER": server,
-        "EPORTAL_COOKIE_SERVER_NAME": server_name,
-        "EPORTAL_USER_GROUP": user_group,
+        "EPORTAL_COOKIE_SERVER": "LT",
+        "EPORTAL_COOKIE_SERVER_NAME": "%E8%81%94%E9%80%9A",
+        "EPORTAL_USER_GROUP": "%E5%B7%A5%E7%A8%8B%E6%8A%80%E6%9C%AF%E5%AD%A6%E9%99%A2%E5%AD%A6%E7%94%9F",
     }
     if username:
         jar["EPORTAL_COOKIE_USERNAME"] = username
     if password:
         jar["EPORTAL_COOKIE_PASSWORD"] = password
 
-    # requests 的 cookie jar 需要 domain
     for name, value in jar.items():
         session.cookies.set(name, value, domain=host, path="/")
 
 
 # ── 核心登录逻辑 ──
 
-def build_form_data(creds: PortalCredentials) -> dict[str, str]:
+def build_form_data(creds: PortalCredentials,
+                    encrypted_password: str) -> dict[str, str]:
     """构造 x-www-form-urlencoded 请求体。"""
     return {
         "userId": creds.user_id,
-        "password": creds.password,
+        "password": encrypted_password,
         "service": creds.service,
         "queryString": creds.query_string,
         "operatorPwd": creds.operator_pwd,
@@ -146,15 +298,11 @@ def build_form_data(creds: PortalCredentials) -> dict[str, str]:
 def _raw_login(session: requests.Session,
                host: str,
                creds: PortalCredentials,
+               encrypted_password: str,
                timeout: int) -> LoginResult:
-    """
-    无重试的底层的登录调用。
-    
-    Returns:
-        LoginResult — 无论网络/HTTP 异常都不会抛给上层。
-    """
+    """无重试的底层登录调用。"""
     url = f"http://{host}/eportal/InterFace.do?method=login"
-    data = build_form_data(creds)
+    data = build_form_data(creds, encrypted_password)
 
     try:
         resp = session.post(url, data=data, timeout=timeout)
@@ -190,32 +338,52 @@ def login(creds: PortalCredentials,
           max_retries: int = DEFAULT_MAX_RETRIES,
           timeout: int = DEFAULT_TIMEOUT) -> LoginResult:
     """
-    执行一次 ePortal 登录（带请求级重试，同一 Session）。
-    
+    执行一次 ePortal 登录。
+
+    自动处理：
+      - RSA 公钥获取（若密码为明文）
+      - 密码加密（反转 + RSA-1024）
+      - Cookie 注入
+      - 指数退避重试
+
     参数:
-        creds:      认证凭据
-        host:       认证服务器地址（IP 或域名）
-        referer:    Referer URL，为空时自动根据 queryString 构建
-        session:    可复用的 Session（自动共享 Cookie）；None 则新建
-        max_retries: 网络失败后的重试次数（指数退避）
-        timeout:    单次请求超时秒数
+        creds:       认证凭据（password 可为明文或已加密 hash）
+        host:        认证服务器地址
+        referer:     Referer URL，空则自动构建
+        session:     可复用的 Session（自动共享 Cookie）
+        max_retries: 网络失败后的重试次数
+        timeout:     单次请求超时秒数
 
     返回:
-        LoginResult — 包含成功/失败、状态码、响应体、错误信息。
+        LoginResult
     """
     own_session = False
     if session is None:
         session = create_session(max_retries)
-        # 注入原始 cURL 中的那些 Cookie（可选）
         inject_cookies(session, host,
                        username=creds.user_id,
                        password=creds.password)
         own_session = True
 
-    # 补齐 Origin / Referer
+    # ── 自动检测 queryString（若为空）──
+    if not creds.query_string:
+        logger.info("🔍 queryString 为空，尝试自动检测...")
+        detected = detect_query_string()
+        if detected:
+            creds.query_string = detected
+            logger.info("✅ 自动检测到 queryString")
+        else:
+            logger.warning("⚠ 自动检测失败，仍使用默认值")
+
     if not referer:
         referer = build_referer(host, creds)
     prepare_session(session, host, referer)
+
+    # ── RSA 加密密码（若尚未加密）──
+    try:
+        encrypted_pwd = ensure_encrypted_password(creds, host, session=session)
+    except RuntimeError as exc:
+        return LoginResult(success=False, error=str(exc))
 
     last_result = LoginResult(success=False, error="未执行")
 
@@ -223,7 +391,7 @@ def login(creds: PortalCredentials,
         logger.debug("🔄 登录尝试 %d/%d  %s:%s",
                      attempt, max_retries, host, creds.user_id)
 
-        result = _raw_login(session, host, creds, timeout)
+        result = _raw_login(session, host, creds, encrypted_pwd, timeout)
 
         if result.success:
             return result
@@ -231,7 +399,7 @@ def login(creds: PortalCredentials,
         last_result = result
 
         if attempt < max_retries:
-            wait = 2 ** attempt   # 指数退避: 2 → 4 → 8 秒
+            wait = 2 ** attempt
             logger.info("⏳ %d 秒后重试...", wait)
             time.sleep(wait)
 
@@ -246,9 +414,7 @@ def login_with_session_retry(
         timeout: int = DEFAULT_TIMEOUT,
 ) -> LoginResult:
     """
-    外层重试 —— 每次挂掉都重建整个 Session（清空 Cookie、重置连接池）。
-    
-    适合在持久性失败后（如认证服务器重启、Session 过期）从头再来。
+    外层重试 —— 每次挂掉都重建整个 Session。
     """
     for attempt in range(1, max_session_attempts + 1):
         logger.info("🔄 会话级重试 %d/%d", attempt, max_session_attempts)
@@ -264,22 +430,63 @@ def login_with_session_retry(
             return result
 
         if attempt < max_session_attempts:
-            delay = 5 * attempt   # 5 → 10 → 15 秒
+            delay = 5 * attempt
             logger.info("⏳ 休息 %d 秒后重建 Session...", delay)
             time.sleep(delay)
 
     return result
 
 
+# ── queryString 自动检测 ──
+
+def detect_query_string(
+    test_url: str = "http://www.baidu.com/",
+    timeout: int = 5,
+) -> str:
+    """访问一个外网地址，从重定向中捕获 queryString。
+
+    未认证时，网络会 302 跳到:
+        http://<portal>/eportal/index.jsp?wlanuserip=...&...
+    从中提取 query 部分返回（不包含前导 ?）。
+
+    返回:
+        queryString 字符串（如 "wlanuserip=10.9.213.248&..."），
+        未捕获到时返回空字符串。
+    """
+    try:
+        resp = requests.get(test_url, timeout=timeout, allow_redirects=False)
+    except requests.RequestException:
+        return ""
+
+    # 检查 302 跳转到 portal
+    location = resp.headers.get("Location", "")
+    if not location:
+        return ""
+
+    # 提取 ? 后的参数
+    if "?" in location:
+        qs = location.split("?", 1)[1]
+        logger.info("📡 自动捕获 queryString: %s...", qs[:80])
+        return qs
+
+    return ""
+
+
+def build_double_encoded_qs(raw_query_string: str) -> str:
+    """将 queryString URL 编码一次（适配 ePortal 的 POST 格式）。
+
+    浏览器行为: JS 取 location.search.substr(1) 得到原始参数，
+    然后 JavaScript 的 encodeURIComponent 对其编码。
+    这里用 requests 的 URL 编码行为模拟（通过 data=dict 自动编码）。
+    """
+    # 直接返回原始参数，requests 的 data= 会帮我们编码一次
+    return raw_query_string
+
+
 # ── 辅助函数 ──
 
 def build_referer(host: str, creds: PortalCredentials) -> str:
-    """从 queryString 等信息构造 Referer URL。
-
-    若 creds.query_string 非空，优先填入其中提取的 wlanuserip 等参数；
-    否则使用示例中的默认值。
-    """
-    # 简单从 queryString 中提取参数（如已编码则无需解码）
+    """构造 Referer URL。"""
     params = {
         "wlanuserip": "10.9.213.248",
         "wlanacname": "logic",
@@ -288,10 +495,9 @@ def build_referer(host: str, creds: PortalCredentials) -> str:
         "userlocation": "ethtrunk/3:3960.0",
     }
 
-    # 如果 queryString 包含这些参数，尝试提取出来覆盖默认值
     if creds.query_string:
         for key in params:
-            marker = f"{key}%3D"  # URL 编码的 =
+            marker = f"{key}%3D"
             if marker in creds.query_string:
                 try:
                     start = creds.query_string.index(marker) + len(marker)
@@ -314,14 +520,27 @@ def build_referer(host: str, creds: PortalCredentials) -> str:
 def parse_login_response(body: str) -> dict:
     """解析认证服务器返回的消息。
 
-    有些 portal 返回纯 JSON，有些返回 HTML 片段。
-    这里统一尝试 JSON 解析，失败则返回 {'raw': body}。
+    ePortal 可能返回 GBK 编码，尝试修复乱码。
     """
     if not body:
         return {}
+
+    # 尝试 JSON 解析
     try:
-        return __import__("json").loads(body)
+        return json.loads(body)
     except (ValueError, TypeError):
+        pass
+
+    # 尝试修复 GBK 乱码：若 raw 中包含 \\u00xx 乱码，尝试用 GBK 重解码
+    try:
+        # 将 str 转回 bytes 再用 GBK 解码
+        raw_bytes = body.encode("latin-1")  # 保持原始字节
+        decoded = raw_bytes.decode("gbk")
+        try:
+            return json.loads(decoded)
+        except (ValueError, TypeError):
+            return {"raw": decoded[:500]}
+    except (UnicodeEncodeError, UnicodeDecodeError, LookupError):
         return {"raw": body[:500]}
 
 
@@ -336,8 +555,7 @@ if __name__ == "__main__":
 
     creds = PortalCredentials(
         user_id="20240000000",
-        # 密码 hash 太长，建议存入配置文件或环境变量
-        password="abcd1234...<从配置文件或环境变量读取>",
+        password="ExamplePass123",   # 明文密码，会自动 RSA 加密
         service="DX",
         query_string=(
             "wlanuserip%3D10.9.213.248"
@@ -351,8 +569,10 @@ if __name__ == "__main__":
 
     result = login_with_session_retry(creds)
     if result.success:
-        print("🎉 登录成功！（可能需要访问 http://www.baidu.com 确认）")
-        print("响应:", result.body[:200])
+        print("🎉 登录成功！（可访问 http://www.baidu.com 确认）")
+        resp_data = parse_login_response(result.body)
+        if resp_data:
+            print("服务器响应:", json.dumps(resp_data, ensure_ascii=False, indent=2)[:500])
     else:
         print(f"❌ 登录失败: {result.error}")
-        print(f"HTTP {result.status_code}: {result.body[:200]}")
+        print(f"HTTP {result.status_code}: {result.body[:300]}")

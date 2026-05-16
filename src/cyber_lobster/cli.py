@@ -18,6 +18,7 @@ from cyber_lobster.network_login import (
     PortalCredentials,
     login_with_session_retry,
     parse_login_response,
+    detect_query_string,
     DEFAULT_HOST,
     DEFAULT_SERVICE,
 )
@@ -56,15 +57,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     # login — 校园网 ePortal 认证
     p_login = sub.add_parser("login", help="校园网 ePortal 自动登录")
-    p_login.add_argument("user_id", help="学号 / 账号")
-    p_login.add_argument("password", help="加密后的密码 hash")
+    p_login.add_argument("user_id", nargs="?", default="", help="学号 / 账号")
+    p_login.add_argument("password", nargs="?", default="", help="加密后的密码 hash")
     p_login.add_argument("--host", default=DEFAULT_HOST, help=f"认证服务器地址（默认 {DEFAULT_HOST}）")
     p_login.add_argument("--service", default=DEFAULT_SERVICE, choices=["DX", "LT", "YD"],
                          help=f"运营商（默认 {DEFAULT_SERVICE}）")
     p_login.add_argument("--query-string", default="",
                          help="原重定向 URL 中的 queryString 参数（URL 编码）")
     p_login.add_argument("--from-config", action="store_true",
-                         help="从 config.json 读取登录配置（字段见示例文件）")
+                         help="从 config.json 读取登录配置（优先）")
 
     return parser
 
@@ -158,6 +159,11 @@ def cmd_login(args: argparse.Namespace) -> int:
         )
         host = login_cfg.get("host", DEFAULT_HOST)
     else:
+        if not args.user_id or not args.password:
+            print("❌ 请提供 user_id 和 password，或使用 --from-config。")
+            print("   用法: cyber-lobster login <学号> <密码hash>")
+            print("   或:   cyber-lobster login --from-config")
+            return 1
         creds = PortalCredentials(
             user_id=args.user_id,
             password=args.password,
@@ -187,7 +193,11 @@ def cmd_login(args: argparse.Namespace) -> int:
         if result.status_code:
             print(f"   HTTP {result.status_code}")
         if result.body:
-            print(f"   响应: {result.body[:300]}")
+            msg = parse_login_response(result.body)
+            if msg:
+                print(f"   响应: {msg}")
+            else:
+                print(f"   响应: {result.body[:300]}")
         return 1
 
 
