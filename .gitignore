@@ -16,3 +16,8 @@ venv/
 .idea/
 *.swp
 *.swo
+
+# PyInstaller 构建产物
+build/
+dist/
+*.spec

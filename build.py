@@ -75,6 +75,7 @@ def main():
         "--hidden-import", "cyber_lobster",
         "--hidden-import", "cyber_lobster.cli",
         "--hidden-import", "cyber_lobster.config",
+        "--hidden-import", "cyber_lobster.logger",
         "--hidden-import", "cyber_lobster.network",
         "--hidden-import", "cyber_lobster.network_login",
         "--hidden-import", "cyber_lobster.system",

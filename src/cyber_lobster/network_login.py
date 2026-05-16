@@ -541,6 +541,42 @@ def parse_login_response(body: str) -> dict:
         return {"raw": body[:500]}
 
 
+# ── 注销 ──
+
+def logout(host: str = DEFAULT_HOST, timeout: int = 5) -> LoginResult:
+    """发送 ePortal 注销请求。
+
+    尝试多个常见注销端点:
+      1. /eportal/InterFace.do?method=logout
+      2. /drcom/logout
+      3. /cgi-bin/srun_portal?action=logout
+    """
+    endpoints = [
+        f"http://{host}/eportal/InterFace.do?method=logout",
+        f"http://{host}/drcom/logout",
+        f"http://{host}/cgi-bin/srun_portal",
+    ]
+    # 第三个需要带参数
+    params_list = [
+        {},
+        {},
+        {"action": "logout"},
+    ]
+
+    for url, params in zip(endpoints, params_list):
+        try:
+            resp = requests.post(url, data=params, timeout=timeout)
+            if resp.status_code == 200:
+                body = _decode_response(resp.content)
+                logger.info("注销请求已发送 (%s)", url)
+                return LoginResult(success=True, status_code=200, body=body)
+        except requests.RequestException as exc:
+            logger.debug("注销端点 %s 失败: %s", url, exc)
+            continue
+
+    return LoginResult(success=False, error="所有注销端点均失败")
+
+
 # ── 独立运行入口 ──
 #   python -m cyber_lobster.network_login
 
