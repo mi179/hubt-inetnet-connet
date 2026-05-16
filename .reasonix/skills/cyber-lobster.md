@@ -1,50 +1,63 @@
 ---
 name: cyber-lobster
-description: 启动 cyber-lobster 校园网断网自动重连 — 安装依赖、配置账号、进入 watch 监控模式
+description: 🦞 校园网断网自动重连工具 — 安装/配置/打包/发布全流程
 ---
 
-## cyber-lobster — Homelab 校园网自动重连工具
+## cyber-lobster
 
-项目位于 `cyber-lobster/`，纯 Python + requests，用于 ePortal 校园网认证的断网自动重连。
+校园网 ePortal 自动重连工具。纯 Python + requests，支持多账号 / 切换 / 注销 / 开机自启 / Windows 弹窗。
 
-### 首次使用
+### 项目位置
+
+```
+/home/miao/cyber-lobster/
+```
+
+### 源码运行
 
 ```bash
-cd cyber-lobster
-
-# 1. 创建虚拟环境并安装
-python3 -m venv .venv
+cd /home/miao/cyber-lobster
 source .venv/bin/activate
-pip install -e .
-
-# 2. 运行配置向导（输入学号、密码明文、运营商）
-cyber-lobster setup
-
-# 3. 启动监控（每 10 秒检测一次，断网自动重连）
-cyber-lobster watch
+python exe_main.py        # 双击自动流（菜单 / 向导 / 监控）
+# 或
+cyber-lobster watch       # CLI 子命令
 ```
 
 ### 常用子命令
 
 | 命令 | 说明 |
 |------|------|
-| `cyber-lobster status` | 查看 CPU 温度 + 内存 |
-| `cyber-lobster ping` | Ping 检测配置的网关 |
-| `cyber-lobster check` | status + ping 一键全检 |
-| `cyber-lobster setup` | 交互配置向导 |
-| `cyber-lobster login --from-config` | 手动执行一次登录 |
-| `cyber-lobster watch` | 监控模式（断网自动重连） |
+| `cyber-lobster setup` | 配置向导 |
+| `cyber-lobster switch` | 切换账号 |
+| `cyber-lobster logout` | 注销下线 |
+| `cyber-lobster watch` | 断网监控 |
+| `cyber-lobster autostart` | 开机自启 |
 
-### watch 参数
+### EXE 打包
 
 ```bash
-cyber-lobster watch --interval 5 --timeout 2
-# --interval 检测间隔（秒，默认 10）
-# --timeout  HTTP 超时（秒，默认 3）
+cd /home/miao/cyber-lobster
+source .venv/bin/activate
+pip install pyinstaller
+python build.py
+# 输出: dist/cyber-lobster (Linux) 或在 Windows 下为 dist/cyber-lobster.exe
 ```
 
-### 注意事项
+Windows 打包需在 Windows PowerShell 中：
+```powershell
+cd \\wsl.localhost\Ubuntu\home\miao\cyber-lobster
+py -3.12 -m pip install -e .
+py -3.12 build.py
+```
 
-- 密码支持明文（自动 RSA 加密）或已加密的 256 位 hex hash
-- config.json 含密码，已被 .gitignore 排除
-- 按 Ctrl+C 干净退出 watch 模式
+### GitHub 发布
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+# 然后用 GitHub API 或网页创建 Release 并上传 EXE
+```
+
+### 配置文件
+
+路径: `~/.cyber_lobster_config.json`
