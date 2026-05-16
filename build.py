@@ -16,33 +16,62 @@ import subprocess
 from pathlib import Path
 
 
+def find_pyinstaller() -> list[str]:
+    """查找可用的 PyInstaller 命令。
+
+    优先使用当前 Python 的 -m PyInstaller，
+    若失败则依次尝试 pyinstaller / pyinstaller3.12 等命令。
+    返回 argv 列表。
+    """
+    # 先用 sys.executable 跑 -m PyInstaller --version 验证
+    try:
+        r = subprocess.run(
+            [sys.executable, "-m", "PyInstaller", "--version"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if r.returncode == 0:
+            return [sys.executable, "-m", "PyInstaller"]
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+
+    # 回退：直接找 pyinstaller 命令
+    candidates = ["pyinstaller", "pyinstaller3.12", "pyinstaller3.11", "pyi-makespec"]
+    for cmd in candidates:
+        try:
+            r = subprocess.run([cmd, "--version"], capture_output=True, text=True, timeout=5)
+            if r.returncode == 0:
+                return [cmd]
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+
+    return []
+
+
 def main():
-    # 确保在项目根目录
     project_root = Path(__file__).parent.resolve()
     os.chdir(project_root)
 
-    # 检查 pyinstaller
-    try:
-        import PyInstaller  # noqa
-    except ImportError:
-        print("❌ 请先安装 PyInstaller:  pip install pyinstaller")
+    # ── 找 PyInstaller ──
+    pyi_cmd = find_pyinstaller()
+    if not pyi_cmd:
+        print("❌ 找不到 PyInstaller。请安装:  pip install pyinstaller")
+        print()
+        print("   如果已安装但仍找不到，尝试:  python -m pip install pyinstaller")
         sys.exit(1)
 
-    # 清理旧构建
-    for p in ["build", "dist", "*.spec"]:
+    # ── 清理旧构建 ──
+    for p in ["build", "dist"]:
         shutil.rmtree(p, ignore_errors=True)
     for spec in project_root.glob("*.spec"):
-        spec.unlink()
+        spec.unlink(missing_ok=True)
 
     # ── PyInstaller 参数 ──
-    args = [
-        sys.executable, "-m", "PyInstaller",
+    args = pyi_cmd + [
         "--onefile",                    # 单文件 exe
         "--name", "cyber-lobster",      # 输出文件名
         "--console",                    # 需要控制台（输入输出）
         "--clean",                      # 清理缓存
         "--noconfirm",                  # 覆盖不询问
-        # 显式添加数据/模块，防止漏捡
         "--hidden-import", "cyber_lobster",
         "--hidden-import", "cyber_lobster.cli",
         "--hidden-import", "cyber_lobster.config",
@@ -54,14 +83,11 @@ def main():
         "--hidden-import", "charset_normalizer",
         "--hidden-import", "certifi",
         "--hidden-import", "idna",
-        # 入口
         "exe_main.py",
     ]
 
     print("🦞  cyber-lobster 打包中...")
-    print(f"    PyInstaller: {sys.executable} -m PyInstaller")
-    print(f"    入口:        exe_main.py")
-    print(f"    输出:        dist/cyber-lobster.exe")
+    print(f"    命令: {' '.join(args)}")
     print()
 
     result = subprocess.run(args, cwd=project_root)
