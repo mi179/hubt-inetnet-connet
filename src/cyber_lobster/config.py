@@ -4,6 +4,7 @@
   1. 命令行 --config 指定路径
   2. ./config.json
   3. ~/.config/cyber-lobster/config.json
+  4. ~/.cyber_lobster.json（EXE 交互入口的默认路径）
 """
 
 import json
@@ -15,6 +16,7 @@ from typing import Optional
 
 CONFIG_DIRNAME = "cyber-lobster"
 CONFIG_FILENAME = "config.json"
+HOME_CONFIG = ".cyber_lobster.json"
 
 
 @dataclass
@@ -37,6 +39,7 @@ def _find_config(custom_path: Optional[str] = None) -> Optional[Path]:
     candidates += [
         Path.cwd() / CONFIG_FILENAME,
         Path.home() / ".config" / CONFIG_DIRNAME / CONFIG_FILENAME,
+        Path.home() / HOME_CONFIG,
     ]
 
     for path in candidates:
