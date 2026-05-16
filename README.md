@@ -7,6 +7,7 @@
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue)](https://python.org)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux-lightgrey)]()
+[![Release](https://img.shields.io/badge/Release-Actions-brightgreen)](.github/workflows/release.yml)
 
 **一键配置 · 多账号切换 · 断网自动重连 · Windows 弹窗通知 · 开机自启**
 
@@ -14,9 +15,9 @@
 
 ---
 
-## 📖 简介
+## 📖 项目简介
 
-`cyber-lobster` 是一个纯 Python 实现的校园网自动重连工具，专为 ePortal 认证系统设计。它运行在后台 7x24 小时检测外网连通性，一旦发现断网立即自动重新认证，让 NAS、工控机、软路由等设备保持永久在线。
+`cyber-lobster` 是一个纯 Python 实现的校园网自动重连守护程序，专为 ePortal 认证系统设计。它持续检测外网连通性，一旦发现断网立即自动重新认证，让 NAS、工控机、软路由、宿舍电脑等设备保持永久在线。
 
 ---
 
@@ -24,27 +25,38 @@
 
 | 特性 | 说明 |
 |------|------|
-| 🦞 **炫酷极客主菜单** | 双击即入交互菜单，支持 🎲 随机皮肤（二次元老婆 / HUBT 校名 / 赛博机甲） |
+| 🦞 **炫酷极客主菜单** | 双击即入交互菜单，支持 🎲 随机皮肤切换 |
 | 🔄 **多账号一键切换** | 保存多个学号，菜单 [2] 切换 / [3] 添加 / [4] 注销 |
 | 🔌 **标准注销下线** | 调用 ePortal 标准 logout 接口，干净下线 |
-| 📡 **7x24 断网重连** | 10 秒检测一次外网，断开自动 RSA 加密重连，Windows 原生弹窗通知 |
-| 🚀 **开机自启** | 一键设置 Windows 开机启动 / Linux crontab + systemd |
-| 🪟 **Windows 弹窗** | 原生 `ctypes.MessageBoxW` 通知，无需任何第三方库 |
+| 📡 **7x24 断网重连** | 10 秒检测一次外网，断开自动 RSA 加密重连 |
+| 🪟 **Windows 原生弹窗** | `ctypes.MessageBoxW` 通知，无需第三方库 |
+| 🚀 **开机自启** | 一键设置 Windows 开机启动 / Linux systemd |
 | 🔒 **隐私安全** | 配置仅存家目录 `~/.cyber_lobster_config.json`，权限 600 |
+| ☁️ **云端自动打包** | 推送 Tag 即触发 GitHub Actions 自动编译发布 |
 
 ---
 
 ## 🚀 快速开始
 
-### 方式一：Windows EXE（推荐）
+### 方式一：Windows 用户（推荐）
 
-从 [Releases](https://github.com/mi179/hubt-inetnet-connet/releases) 下载 `cyber-lobster.exe`，双击运行：
+适合**完全不懂编程**的用户，下载即用。
+
+#### 第 1 步：下载 EXE
+
+打开 https://github.com/mi179/hubt-inetnet-connet/releases/latest
+
+找到 **Assets** → 点击 **`cyber-lobster.exe`** 下载。
+
+#### 第 2 步：双击运行
+
+双击 `cyber-lobster.exe`，你将看到：
 
 ```
-         🦞  cyber-lobster  v0.2.0
+         🦞  cyber-lobster  v0.3.0
 
-  📡 网络状态:  ✅ 外网连通
-  👤 当前账号:  20240000000 (电信)
+  📡 网络状态:  ❌ 外网断开
+  👤 当前账号:  （无 — 请先添加账号）
 
      [1]  🚀  一键连网并进入守护挂机模式
      [2]  🔄  切换当前账号
@@ -54,20 +66,81 @@
      [0]  ❌  退出程序
 ```
 
-> 💡 **首次运行** → 选 [3] 添加账号，验证成功后自动进入守护模式  
-> 💡 **以后双击** → 菜单任你选，监控/切号/注销/换皮肤
+#### 第 3 步：添加账号
 
-### 方式二：从源码运行
+按键盘 `3` 然后回车 → 进入配置向导：
+
+```
+  请选择运营商:
+    1. 电信 (DX)
+    2. 联通 (LT)
+    3. 移动 (YD)
+  请选择 [1]: 1
+  学号: 20240000000
+  密码: ········
+```
+
+填写后自动验证登录，**验证成功**配置自动保存到家目录。
+
+#### 第 4 步：启动守护模式
+
+回到主菜单，按 `1` 回车 → 进入 7x24 断网自动重连：
+
+```
+[2026-05-17 12:00:00] [INFO] 网络正常
+[2026-05-17 12:00:10] [WARN] 断连 (1)，正在重连...
+[2026-05-17 12:00:12] [OK]   重连成功
+```
+
+> 按 `Ctrl+C` 停止守护，返回主菜单。
+
+#### 第 5 步（可选）：设置开机自启
+
+在主菜单按 `0` 退出程序，打开 cmd 或 PowerShell 运行：
+
+```cmd
+cyber-lobster.exe autostart
+```
+
+以后电脑开机就会自动启动 cyber-lobster 开始监控。
+
+---
+
+### 方式二：从源码运行（开发者）
+
+#### 第 1 步：克隆项目
 
 ```bash
 git clone https://github.com/mi179/hubt-inetnet-connet.git
 cd cyber-lobster
-python3 -m venv .venv && source .venv/bin/activate
-pip install -e .
-cyber-lobster
 ```
 
-### 方式三：打包成单文件 EXE
+#### 第 2 步：创建虚拟环境
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate    # Linux / macOS
+# 或
+.venv\Scripts\activate       # Windows
+```
+
+#### 第 3 步：安装依赖
+
+```bash
+pip install -e .
+```
+
+#### 第 4 步：运行
+
+```bash
+python exe_main.py            # 进入交互主菜单
+# 或
+cyber-lobster watch           # 直接进入守护模式
+```
+
+---
+
+### 方式三：打包为单文件 EXE
 
 ```bash
 pip install pyinstaller
@@ -77,19 +150,19 @@ python build.py
 
 ---
 
-## 📋 全部命令
+## 📋 命令参考
 
-| 命令 | 说明 |
-|------|------|
-| `cyber-lobster`（无参数） | 进入交互主菜单 |
-| `cyber-lobster watch` | 断网自动重连守护模式 |
-| `cyber-lobster setup` | 配置向导（添加账号） |
-| `cyber-lobster switch` | 切换当前默认账号 |
-| `cyber-lobster logout` | 注销下线 |
-| `cyber-lobster autostart` | 设置开机自启 |
-| `cyber-lobster status` | 系统状态（CPU / 内存） |
-| `cyber-lobster ping` | Ping 检测网关 |
-| `cyber-lobster --help` | 查看全部帮助 |
+| 命令 | 功能 | 详细说明 |
+|------|------|----------|
+| `cyber-lobster`（无参数） | 进入交互主菜单 | 显示 Logo + 网络状态 + 6 项菜单 |
+| `cyber-lobster watch` | 断网自动重连 | 7x24 守护，每隔 10s 检测一次 |
+| `cyber-lobster setup` | 配置向导 | 添加新账号，验证后保存 |
+| `cyber-lobster switch` | 切换账号 | 列出所有已保存账号，选号切换 |
+| `cyber-lobster logout` | 注销下线 | 向 ePortal 发送注销请求 |
+| `cyber-lobster autostart` | 开机自启 | Windows 创建 Startup 脚本 |
+| `cyber-lobster status` | 系统状态 | CPU 温度 + 内存使用 |
+| `cyber-lobster ping` | Ping 检测 | 测试网关连通性 |
+| `cyber-lobster --help` | 帮助 | 显示全部命令和参数 |
 
 ---
 
@@ -97,111 +170,217 @@ python build.py
 
 ```
 cyber-lobster/
-├── exe_main.py                  # EXE 双击入口（主菜单）
-├── build.py                     # PyInstaller 打包脚本
-├── pyproject.toml               # 项目元数据
+├── exe_main.py                     # EXE 入口（主菜单渲染 + 交互循环）
+├── build.py                        # PyInstaller 打包脚本
+├── pyproject.toml                  # 项目元数据 + 入口注册
+├── .github/workflows/release.yml   # GitHub Actions 云端自动打包
 ├── src/cyber_lobster/
-│   ├── cli.py                   #  CLI 框架（9 个子命令）
-│   ├── config.py                #  多账号配置文件管理
-│   ├── logger.py                #  时间戳日志 + Windows 弹窗
-│   ├── network.py               #  Ping / HTTP 连通性检测
-│   ├── network_login.py         #  ePortal 登录 + RSA + 注销
-│   └── system.py                #  CPU 温度 / 内存检测
+│   ├── __init__.py                 # 版本号
+│   ├── cli.py                      # CLI 框架（argparse 9 个子命令）
+│   ├── config.py                   # 多账号配置管理（家目录存储）
+│   ├── logger.py                   # 时间戳日志 + Windows ctypes 弹窗
+│   ├── network.py                  # HTTP 连通性检测 + Ping
+│   ├── network_login.py            # ePortal 登录 + RSA 加密 + 注销
+│   └── system.py                   # CPU 温度 / 内存检测
 └── tests/
 ```
 
 ---
 
-## 🔄 工作流程
+## 🔄 交互主菜单详解
+
+### 菜单选项说明
+
+| 选项 | 快捷键 | 功能 |
+|------|--------|------|
+| `[1] 🚀 一键连网并守护` | 按 `1` + 回车 | 先检测外网，若离线则自动登录，然后进入 7x24 监控 |
+| `[2] 🔄 切换账号` | 按 `2` + 回车 | 列出所有已保存的学号，输入序号切换默认账号 |
+| `[3] ➕ 添加新账号` | 按 `3` + 回车 | 进入配置向导，输入运营商/学号/密码，验证后保存 |
+| `[4] 🔌 注销下线` | 按 `4` + 回车 | 发送 ePortal 注销请求，弹窗确认 |
+| `[5] 🎲 切换皮肤` | 按 `5` + 回车 | 随机更换一套 ASCII 皮肤刷新菜单 |
+| `[0] ❌ 退出` | 按 `0` + 回车 | 清除屏幕，退出程序 |
+
+### 状态栏说明
+
+菜单顶部显示实时信息：
 
 ```
-┌─────────────┐
-│  双击 EXE    │
-└──────┬──────┘
-       ▼
-┌──────────────┐
-│  交互主菜单    │ ← 随机皮肤 + 网络状态
-│  [1] 监控     │
-│  [2] 切换账号  │
-│  [3] 添加账号  │
-│  [4] 注销下线  │
-│  [5] 换皮肤    │
-│  [0] 退出     │
-└──────┬───────┘
-       │ 选 [1]
-       ▼
-┌──────────────┐      ┌───────────────┐
-│  守护监控模式   │────→│  每 10s 检测   │
-│  Ctrl+C 返回   │     │  外网连通性    │
-└──────────────┘      └───────┬───────┘
-                              │ 断连
-                              ▼
-                       ┌──────────────┐
-                       │  自动 RSA 登录 │
-                       │  Windows 弹窗  │
-                       └───────┬──────┘
-                               │ 成功
-                               ▼
-                       ┌──────────────┐
-                       │  继续监控     │
-                       └──────────────┘
+  📡 网络状态:  ✅ 外网连通     ← 绿色表示可上网，红色表示断网
+  👤 当前账号:  20240000000 (电信)  ← 当前使用的账号
 ```
+
+> 每次返回菜单都会**自动重新检测**网络状态，无需手动刷新。
 
 ---
 
-## 🪟 Windows 弹窗效果
+## ⚙️ 配置文件详解
 
-断网重连成功 / 注销成功时自动弹出：
+### 文件位置
 
-```
-┌──────────────────────────────────┐
-│  🦞 赛博龙虾守护者               │
-│                                  │
-│  校园网已自动重新连通！           │
-│                                  │
-│            [确定]                 │
-└──────────────────────────────────┘
-```
+- **Windows**: `C:\Users\你的用户名\.cyber_lobster_config.json`
+- **Linux**: `~/.cyber_lobster_config.json`
 
----
-
-## 🏠 配置文件
-
-路径：`~/.cyber_lobster_config.json`
+### 配置结构
 
 ```json
 {
   "current_user_id": "20240000000",
   "accounts": {
     "20240000000": {
-      "password": "...",
+      "password": "mypassword",
       "service": "DX",
-      "host": "172.16.54.18",
-      "query_string": ""
+      "host": "172.16.54.18"
+    },
+    "20240000001": {
+      "password": "anotherpw",
+      "service": "LT",
+      "host": "172.16.54.18"
     }
   }
 }
 ```
 
-> 密码存明文（登录时自动 RSA 加密），文件权限 600 仅当前用户可读。
+### 安全说明
+
+- 密码存明文（登录时自动 RSA 加密传输）
+- 文件权限自动设为 `600`（仅当前系统用户可读写）
+- 配置路径固定在家目录，**不随 EXE 位置改变**
+
+---
+
+## 🔧 常见问题
+
+### Q: 登录失败怎么办？
+
+检查以下几点：
+
+1. **运营商选错** — 电信选 DX，联通选 LT，移动选 YD
+2. **账号或密码错误** — 确认学号和密码正确
+3. **认证服务器地址不对** — 默认 `172.16.54.18`，联系学校网络中心确认
+4. **queryString 过期** — 菜单 [3] 重新添加账号，或从浏览器登录页复制 queryString
+
+### Q: 如何卸载？
+
+删除以下两个文件即可：
+
+- `cyber-lobster.exe`（你下载的程序）
+- `~/.cyber_lobster_config.json`（配置文件）
+
+### Q: 如何完全清理配置？
+
+```bash
+rm ~/.cyber_lobster_config.json
+```
+
+下次运行时会自动进入配置向导。
+
+---
+
+## 🔄 工作流程图
+
+```
+┌─────────────────────────────────────────────────────┐
+│             双击 cyber-lobster.exe                   │
+└────────────────────┬────────────────────────────────┘
+                     ▼
+┌─────────────────────────────────────────────────────┐
+│              🦞 交互主菜单 (随机皮肤)                 │
+│                                                      │
+│   ┌─────────────────────────────────────────────┐   │
+│   │  📡 网络状态: ✅ 在线                        │   │
+│   │  👤 当前账号: 20240000000 (电信)             │   │
+│   ├─────────────────────────────────────────────┤   │
+│   │  [1] 🚀 一键连网并进入守护挂机模式            │   │
+│   │  [2] 🔄 切换当前账号                         │   │
+│   │  [3] ➕ 添加新账号                           │   │
+│   │  [4] 🔌 注销下线                            │   │
+│   │  [5] 🎲 切换界面皮肤                         │   │
+│   │  [0] ❌ 退出程序                             │   │
+│   └─────────────────────────────────────────────┘   │
+└──────┬──────────────────────────────────────────────┘
+       │
+       │ 选 [1]
+       ▼
+┌─────────────────────────────────────────────────────┐
+│  ① 检测外网连通性                                    │
+│     → 已连通: 直接进入守护                            │
+│     → 断网: 自动 RSA 加密登录                         │
+│            → 成功: 进入守护 + Windows 弹窗            │
+│            → 失败: 提示错误，返回菜单                  │
+└────────────────────┬────────────────────────────────┘
+                     ▼ 进入守护
+┌─────────────────────────────────────────────────────┐
+│              🛡️ 守护监控模式                          │
+│                                                      │
+│  每 10 秒:  HTTP GET → 223.5.5.5                     │
+│             ├─ ✅ 通 → 日志"网络正常"                  │
+│             └─ ❌ 断 → 自动登录 + 弹窗                │
+│                                                      │
+│  按 Ctrl+C 返回主菜单                                  │
+└─────────────────────────────────────────────────────┘
+```
+
+---
+
+## ☁️ 云端自动打包发布
+
+本项目配置了 GitHub Actions 自动打包流水线：
+
+### 触发方式
+
+推送以 `v` 开头的 Git Tag 到 GitHub：
+
+```bash
+git tag v0.4.0
+git push origin main --tags
+```
+
+### 自动流程
+
+```
+推送 tag v0.4.0
+    ↓
+GitHub Actions 自动触发 release.yml
+    ↓
+拉起 Windows Server 2022 虚拟机
+    ↓
+安装 Python 3.10 + 项目依赖
+    ↓
+PyInstaller 编译 → cyber-lobster.exe
+    ↓
+自动创建 Release + 上传 EXE
+    ↓
+根据 commit 自动生成更新日志
+```
+
+### 查看进度
+
+https://github.com/mi179/hubt-inetnet-connet/actions
 
 ---
 
 ## 📋 更新日志
 
-### v0.2.0 (2026-05-17)
-- 🆕 交互主菜单 — 赛博 Logo + 实时网络状态
+### v0.3.0 (2026-05-17)
+- 🆕 交互主菜单 — 6 项功能 + 实时网络状态检测
 - 🆕 3 套随机 ASCII 皮肤 + 菜单 [5] 一键切换
-- 🆕 多账号切换 & 注销下线
-- 🆕 开机自启设置（Windows / Linux）
-- 🆕 EXE 双模式：双击菜单 / 命令行参数
-- 🔧 Windows 原生 ctypes 弹窗
-- 🔧 配置迁移至家目录，多账号存储
+- 🆕 多账号切换 / 注销下线功能
+- 🆕 开机自启设置
+- 🆕 GitHub Actions 云端自动打包发布
+- 🔧 邮箱极客排版 README 说明书
+- 🔧 Windows 原生 ctypes 弹窗通知
+
+### v0.2.0 (2026-05-17)
+- 🆕 交互主菜单 + 网络状态
+- 🆕 多套随机皮肤
+- 🆕 多账号切换 & 注销
+- 🆕 开机自启
+- 🔧 Windows 弹窗
 
 ### v0.1.0 (2026-05-16)
 - 🆕 ePortal RSA 加密登录
-- 🆕 断网自动重连 watch 监控
-- 🆕 交互式配置向导 setup
+- 🆕 断网自动重连 watch
+- 🆕 配置向导 setup
 - 🆕 单文件 EXE 打包
 
 ---
@@ -213,5 +392,6 @@ cyber-lobster/
 ---
 
 <div align="center">
-  Made with ❤️ · 赛博龙虾守护着你的校园网
+  Made with ❤️ · 赛博龙虾守护着你的校园网<br>
+  <sub>有问题请提交 Issue → https://github.com/mi179/hubt-inetnet-connet/issues</sub>
 </div>
