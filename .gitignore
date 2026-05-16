@@ -1,0 +1,18 @@
+# 配置文件（含密码等敏感信息）
+config.json
+
+# Python 缓存
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# 虚拟环境
+.venv/
+venv/
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+*.swo

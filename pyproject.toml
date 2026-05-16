@@ -1,0 +1,17 @@
+[project]
+name = "cyber-lobster"
+version = "0.1.0"
+description = "Homelab 网络与服务器运维 CLI 工具"
+authors = [{ name = "Your Name" }]
+license = { text = "MIT" }
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "requests>=2.28",
+]
+
+[project.scripts]
+cyber-lobster = "cyber_lobster.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

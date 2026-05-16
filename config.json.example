@@ -1,0 +1,16 @@
+{
+  "gateways": [
+    "192.168.1.1",
+    "10.0.0.1",
+    "1.1.1.1"
+  ],
+  "ping_count": 3,
+  "ping_timeout": 5,
+  "login": {
+    "host": "172.16.54.18",
+    "user_id": "20240000000",
+    "password": "abcd1234...",
+    "service": "DX",
+    "query_string": "wlanuserip%3D10.9.213.248%26wlanacname%3Dlogic%26nasip%3D10.253.0.17%26wlanparameter%3D50-bb-b5-db-26-36%26url%3Dhttp%3A%2F%2Fwww.baidu.com%2F%26userlocation%3Dethtrunk%2F3%3A3960.0"
+  }
+}
