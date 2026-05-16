@@ -184,5 +184,15 @@ def main() -> int:
     return run_watch_loop(cfg)
 
 
+def entry_point() -> int:
+    """统一入口：有参数走 CLI，无参数走自动流。"""
+    if len(sys.argv) > 1:
+        # 有命令行参数 → 交给 cli.py 处理
+        from cyber_lobster.cli import main as cli_main
+        return cli_main()
+    # 无参数 → 双击自动流
+    return main()
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(entry_point())

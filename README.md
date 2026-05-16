@@ -41,6 +41,17 @@ ePortal 校园网认证 · 断网自动重连 · 多账号管理 · 开机自启
 以后：   双击 → 直接进入监控
 ```
 
+EXE 同时支持命令行参数（在终端/cmd 中运行）：
+
+```cmd
+cyber-lobster.exe setup          # 配置向导
+cyber-lobster.exe watch          # 启动监控
+cyber-lobster.exe switch         # 切换账号
+cyber-lobster.exe logout         # 注销下线
+cyber-lobster.exe autostart      # 设置开机自启
+cyber-lobster.exe --help         # 查看全部命令
+```
+
 ### 方式二：从源码运行
 
 ```bash
