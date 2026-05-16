@@ -3,6 +3,7 @@
 import subprocess
 import re
 import statistics
+import sys
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -37,8 +38,13 @@ RE_SUMMARY = re.compile(
 
 
 def ping_host(host: str, count: int = 3, timeout: int = 5) -> PingResult:
-    """对单个 host 执行 ping，返回 PingResult。"""
-    cmd = ["ping", "-c", str(count), "-W", str(timeout), host]
+    """对单个 host 执行 ping，返回 PingResult。自动适配 Linux / Windows。"""
+    if sys.platform == "win32":
+        # Windows: -n 次数, -w 超时(毫秒)
+        cmd = ["ping", "-n", str(count), "-w", str(timeout * 1000), host]
+    else:
+        # Linux / macOS
+        cmd = ["ping", "-c", str(count), "-W", str(timeout), host]
 
     try:
         proc = subprocess.run(
