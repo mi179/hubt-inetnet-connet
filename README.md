@@ -226,17 +226,72 @@ cyber-lobster/
      [0] ↩ 返回主菜单
 ```
 
-**内置皮肤库（5 款）：**
+**内置皮肤展示（5 款）：**
 
-| 皮肤名 | 风格 |
-|--------|------|
-| HUBT 专属版 | 校名 ASCII |
-| 颜文字老婆 | `(\_/)` 可爱风 |
-| 机甲龙虾 | 赛博机甲 |
-| 初音未来 | 初音未来动漫风 |
-| 黑客帝国 | 代码雨 Matrix |
+<details open>
+<summary>🦞 皮肤1: HUBT 专属版</summary>
 
-> 自定义皮肤保存在 `~/.cyber_lobster_config.json` 的 `custom_skins` 字段，不会丢失。
+```
+ ██╗  ██╗██╗   ██╗██████╗ ████████╗
+ ██║  ██║██║   ██║██╔══██╗╚══██╔══╝
+ ███████║██║   ██║██████╔╝   ██║   
+ ██╔══██║██║   ██║██╔══██╗   ██║   
+ ██║  ██║╚██████╔╝██████╔╝   ██║   
+ ╚═╝  ╚═╝ ╚═════╝ ╚═════╝    ╚═╝   
+       🦞 Cyber-Lobster v0.7.0 🦞
+```
+</details>
+
+<details open>
+<summary>😊 皮肤2: 颜文字老婆</summary>
+
+```
+   (\_/)
+  ( •_•)  < 主人，今天的网络也交给我吧！
+  / >🦞
+```
+</details>
+
+<details open>
+<summary>🤖 皮肤3: 机甲龙虾</summary>
+
+```
+     / \      / \ 
+    (   )____(   )
+     \  /    \  / 
+      \|  🦞  |/  
+       |      |   
+       \______/   
+  [ CYBER LOBSTER SYSTEM ONLINE ]
+```
+</details>
+
+<details open>
+<summary>🎤 皮肤4: 初音未来</summary>
+
+```
+      oﾟ*｡o
+     /⌒＼_） < Master，初音已接管网络模块喵~
+    /　 　/
+    |　　/
+    ＼_/) 
+  [ HATSUNE MIKU CYBER-LINK ]
+```
+</details>
+
+<details open>
+<summary>💊 皮肤5: 黑客帝国</summary>
+
+```
+  01001011 01001111
+  >> WAKE UP, LOBSTER...
+  >> THE MATRIX HAS YOU.
+```
+</details>
+
+> 💡 **随机盲盒模式**：默认每次进菜单随机换一款  
+> 💡 **固定模式**：选 [1] 锁定你最爱的那款  
+> 💡 **自定义皮肤**：选 [3] 起名 → 粘贴你的 ASCII 图案 → EOF 结束，永久保存在配置中
 
 ---
 
