@@ -308,6 +308,10 @@ def _raw_login(session: requests.Session,
         resp = session.post(url, data=data, timeout=timeout)
         body = resp.text
 
+        # ePortal 返回 GBK 编码，requests.text 用 UTF-8 解码会乱码
+        # 改用 resp.content 并尝试 GBK 优先
+        raw = resp.content
+        body = _decode_response(raw)
         if resp.status_code == 200:
             logger.info("✅ 登录 HTTP 200 —— %s", body[:120])
             return LoginResult(success=True, status_code=200, body=body)
@@ -517,30 +521,23 @@ def build_referer(host: str, creds: PortalCredentials) -> str:
     )
 
 
-def parse_login_response(body: str) -> dict:
-    """解析认证服务器返回的消息。
+def _decode_response(raw: bytes) -> str:
+    """尝试用 GBK 解码，失败回退 UTF-8（ePortal 返回 GBK 编码）。"""
+    for charset in ("gbk", "utf-8", "latin-1"):
+        try:
+            return raw.decode(charset)
+        except (UnicodeDecodeError, LookupError):
+            continue
+    return raw.decode("utf-8", errors="replace")
 
-    ePortal 可能返回 GBK 编码，尝试修复乱码。
-    """
+
+def parse_login_response(body: str) -> dict:
+    """解析 ePortal 返回的 JSON 响应。"""
     if not body:
         return {}
-
-    # 尝试 JSON 解析
     try:
         return json.loads(body)
     except (ValueError, TypeError):
-        pass
-
-    # 尝试修复 GBK 乱码：若 raw 中包含 \\u00xx 乱码，尝试用 GBK 重解码
-    try:
-        # 将 str 转回 bytes 再用 GBK 解码
-        raw_bytes = body.encode("latin-1")  # 保持原始字节
-        decoded = raw_bytes.decode("gbk")
-        try:
-            return json.loads(decoded)
-        except (ValueError, TypeError):
-            return {"raw": decoded[:500]}
-    except (UnicodeEncodeError, UnicodeDecodeError, LookupError):
         return {"raw": body[:500]}
 
 

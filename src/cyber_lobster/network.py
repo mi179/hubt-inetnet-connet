@@ -1,4 +1,4 @@
-"""网络连通性检测（基于 ping）。"""
+"""网络连通性检测（基于 ping / HTTP）。"""
 
 import subprocess
 import re
@@ -79,3 +79,45 @@ def check_gateways(
     for gw in gateways:
         results.append(ping_host(gw, count=count, timeout=timeout))
     return results
+
+
+# ---- HTTP 连通性检测 ----
+
+CHECK_URLS = [
+    "http://223.5.5.5",       # 阿里 DNS
+    "http://www.baidu.com",   # 百度
+    "http://1.1.1.1",         # Cloudflare DNS
+]
+
+
+def check_connectivity(timeout: float = 3.0) -> bool:
+    """尝试 HTTP GET 检测外网连通性。
+
+    依次尝试多个常用地址，任一成功即认为网络正常。
+    全部超时 / 失败返回 False。
+    """
+    for url in CHECK_URLS:
+        try:
+            r = subprocess.run(
+                ["curl", "-s", "-o", "/dev/null", "-w", "%{http_code}",
+                 "--max-time", str(int(timeout)), url],
+                capture_output=True,
+                text=True,
+                timeout=timeout + 1,
+            )
+            code = r.stdout.strip()
+            if code and code != "000":
+                return True
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+
+        # fallback: 如果 curl 不可用，尝试 python 内置
+        try:
+            import urllib.request
+            req = urllib.request.Request(url, method="HEAD")
+            urllib.request.urlopen(req, timeout=timeout)
+            return True
+        except Exception:
+            continue
+
+    return False

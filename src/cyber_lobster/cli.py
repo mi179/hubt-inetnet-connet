@@ -2,7 +2,9 @@
 
 import argparse
 import json
+import os
 import sys
+from pathlib import Path
 from typing import NoReturn
 
 from cyber_lobster import __version__
@@ -13,7 +15,7 @@ from cyber_lobster.system import (
     get_memory_info,
     format_memory,
 )
-from cyber_lobster.network import check_gateways
+from cyber_lobster.network import check_gateways, check_connectivity
 from cyber_lobster.network_login import (
     PortalCredentials,
     login_with_session_retry,
@@ -55,6 +57,9 @@ def build_parser() -> argparse.ArgumentParser:
     # check — 全部检查
     sub.add_parser("check", help="系统状态 + 网关连通性一并检查")
 
+    # setup — 交互配置向导
+    sub.add_parser("setup", help="交互式配置向导（创建/修改 config.json）")
+
     # login — 校园网 ePortal 认证
     p_login = sub.add_parser("login", help="校园网 ePortal 自动登录")
     p_login.add_argument("user_id", nargs="?", default="", help="学号 / 账号")
@@ -66,6 +71,15 @@ def build_parser() -> argparse.ArgumentParser:
                          help="原重定向 URL 中的 queryString 参数（URL 编码）")
     p_login.add_argument("--from-config", action="store_true",
                          help="从 config.json 读取登录配置（优先）")
+
+    # watch — 断网自动重连
+    p_watch = sub.add_parser("watch", help="持续监控外网连通性，断网自动重连")
+    p_watch.add_argument("--interval", type=int, default=10,
+                         help="检测间隔秒数（默认 10）")
+    p_watch.add_argument("--timeout", type=float, default=3.0,
+                         help="单次连通检测超时秒数（默认 3）")
+    p_watch.add_argument("--check-url", type=str, default="",
+                         help="自定义连通检测 URL（默认自动选）")
 
     return parser
 
@@ -144,13 +158,24 @@ def cmd_login(args: argparse.Namespace) -> int:
     if args.from_config:
         cfg = load_config(args.config)
         login_cfg = cfg.login or {}
+
+        # ── 配置缺失 → 自动进向导 ──
         if not login_cfg:
-            print("❌ config.json 中缺少登录凭据。")
-            print("   请包含以下字段（扁平即可）：")
-            print('    "user_id": "20251022129",')
-            print('    "password": "<hash>",')
-            print('    "service": "DX"')
-            return 1
+            print("⚠ 未找到有效配置。")
+            try:
+                ans = input("  是否进入配置向导？[Y/n]: ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                ans = "n"
+            if ans in ("", "y", "yes"):
+                try:
+                    login_cfg = setup_config_wizard(args.config)
+                except (OSError, KeyboardInterrupt):
+                    print("❌ 配置取消。")
+                    return 1
+            else:
+                print("❌ 请先运行 cyber-lobster setup 创建配置。")
+                return 1
+
         creds = PortalCredentials(
             user_id=login_cfg.get("user_id", ""),
             password=login_cfg.get("password", ""),
@@ -201,11 +226,204 @@ def cmd_login(args: argparse.Namespace) -> int:
         return 1
 
 
+# ── 挂机监控 ──────────────────────────────────────
+
+def _ts() -> str:
+    """当前时间戳字符串，格式 [2026-05-16 23:45:00]"""
+    from datetime import datetime
+    return datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
+
+
+def cmd_watch(args: argparse.Namespace) -> int:
+    """子命令: watch — 断网自动重连"""
+    from cyber_lobster.config import _find_config as find_config
+
+    interval = args.interval
+    timeout = args.timeout
+
+    # 检查配置是否存在
+    cfg_path = find_config(args.config)
+    if not cfg_path:
+        print(f"{_ts()} ⚠ 未找到 config.json。")
+        print("   请先运行 cyber-lobster setup 配置账号。")
+        return 1
+
+    print(f"🦞 cyber-lobster — 监控模式启动")
+    print(f"   检测间隔:  {interval}s")
+    print(f"   检测超时:  {timeout}s")
+    print(f"   按 Ctrl+C 退出")
+    print("=" * 40)
+
+    fail_count = 0
+
+    try:
+        while True:
+            ts = _ts()
+
+            try:
+                online = check_connectivity(timeout=timeout)
+            except Exception as exc:
+                online = False
+                print(f"{ts} ⚠ 检测异常: {exc}")
+
+            if online:
+                if fail_count > 0:
+                    print(f"{ts} ✅ 网络已恢复（之前断线 {fail_count} 次）")
+                    fail_count = 0
+                else:
+                    print(f"{ts} 网络正常")
+            else:
+                fail_count += 1
+                print(f"{ts} ❌ 掉线 ({fail_count})，正在重连...")
+
+                try:
+                    # 重新加载配置（可能被用户中途修改）
+                    cfg = load_config(args.config)
+                    login_cfg = cfg.login or {}
+                    if not login_cfg:
+                        print(f"    ⚠ 配置无效，请运行 cyber-lobster setup")
+                    else:
+                        creds = PortalCredentials(
+                            user_id=login_cfg.get("user_id", ""),
+                            password=login_cfg.get("password", ""),
+                            service=login_cfg.get("service", DEFAULT_SERVICE),
+                            query_string=login_cfg.get("query_string", ""),
+                        )
+                        host = login_cfg.get("host", DEFAULT_HOST)
+                        result = login_with_session_retry(creds, host=host,
+                                                          max_session_attempts=1,
+                                                          request_retries=2)
+                        if result.success:
+                            resp = parse_login_response(result.body)
+                            msg = resp.get("message", "") or resp.get("result", "")
+                            print(f"    ✅ 重连成功: {msg}")
+                            fail_count = 0
+                        else:
+                            print(f"    ❌ 重连失败: {result.error or result.body[:80]}")
+                except Exception as exc:
+                    print(f"    ❌ 重连异常: {type(exc).__name__}: {exc}")
+
+            import time
+            time.sleep(interval)
+
+    except KeyboardInterrupt:
+        print(f"\n{_ts()} 监控已停止。")
+        return 0
+
+
+# ── 交互配置向导 ──────────────────────────────────
+
+CONFIG_FIELDS = [
+    ("user_id",     "学号",           None),
+    ("password",    "密码（明文或已加密 hash）", None),
+    ("service",     "运营商 [DX 电信 / LT 联通 / YD 移动]", "DX"),
+    ("host",        "认证服务器地址",  DEFAULT_HOST),
+]
+
+VALID_SERVICES = {"DX", "LT", "YD"}
+
+
+def _prompt_nonempty(label: str, default: str | None = None) -> str:
+    """提示用户输入，不允许留空。"""
+    while True:
+        hint = f" [{default}]" if default else ""
+        val = input(f"  {label}{hint}: ").strip()
+        if not val and default:
+            return default
+        if val:
+            return val
+        print("  ⚠ 此项不能为空，请重新输入。")
+
+
+def _prompt_choice(label: str, choices: set[str], default: str) -> str:
+    """提示用户从选项中选择一项。"""
+    while True:
+        val = input(f"  {label} [{default}]: ").strip().upper()
+        if not val:
+            return default
+        if val in choices:
+            return val
+        print(f"  ⚠ 仅支持 {', '.join(sorted(choices))}，请重新输入。")
+
+
+def setup_config_wizard(config_path: str | None = None) -> dict:
+    """交互式配置向导。
+
+    返回保存的配置 dict，同时将配置写入 config.json。
+    """
+    print()
+    print("🦞   cyber-lobster 配置向导")
+    print("═" * 40)
+    print("  按提示输入认证信息，完成后自动保存。")
+    print()
+
+    # 逐项询问
+    user_id = _prompt_nonempty("学号")
+    password = _prompt_nonempty("密码（明文或已加密 hash）")
+    service = _prompt_choice("运营商 [DX 电信 / LT 联通 / YD 移动]", VALID_SERVICES, "DX")
+    host = _prompt_nonempty("认证服务器地址", DEFAULT_HOST)
+    # query_string 可选，不强制
+    qs_hint = (
+        "（可选）queryString，从浏览器重定向地址栏复制;\n"
+        "  留空则登录时自动检测"
+    )
+    query_string = input(f"  queryString {qs_hint}: ").strip()
+
+    # 组装配置
+    config = {
+        "user_id": user_id,
+        "password": password,
+        "service": service,
+        "host": host,
+    }
+    if query_string:
+        config["query_string"] = query_string
+
+    # 确认摘要
+    print()
+    print("  ── 确认信息 ──")
+    print(f"    学号:          {user_id}")
+    pwd_preview = password[:6] + "****" if len(password) > 8 else "****"
+    print(f"    密码:          {pwd_preview}")
+    svc_name = {"DX": "电信", "LT": "联通", "YD": "移动"}.get(service, service)
+    print(f"    运营商:        {svc_name} ({service})")
+    print(f"    服务器:        {host}")
+
+    # 保存
+    save_path = Path(config_path or "config.json")
+    try:
+        save_path.write_text(
+            json.dumps(config, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        print(f"  ✅ 配置已保存到 {save_path}")
+    except OSError as exc:
+        print(f"  ❌ 写入失败 ({exc})")
+        print("  请检查目录权限后重试。")
+        raise
+
+    print("═" * 40)
+    print()
+    return config
+
+
+def cmd_setup(args: argparse.Namespace) -> int:
+    """子命令: setup — 配置向导"""
+    setup_config_wizard(args.config)
+    print("🦞 配置已完成。运行以下命令登录：")
+    print("   cyber-lobster login --from-config")
+    return 0
+
+
+# ── 命令注册表 ──────────────────────────────────
+
 COMMANDS = {
     "status": cmd_status,
     "ping": cmd_ping,
     "check": cmd_check,
+    "setup": cmd_setup,
     "login": cmd_login,
+    "watch": cmd_watch,
 }
 
 
