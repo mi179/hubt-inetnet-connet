@@ -20,11 +20,11 @@ ePortal 校园网认证 · 断网自动重连 · 多账号管理 · 开机自启
 
 ### ✨ 特性
 
+- ✅ **交互主菜单** — 双击即见赛博 Logo + 网络状态 + 5 项功能菜单
 - ✅ **自动重连** — 检测到断网后自动 RSA 加密登录，无需人工干预
-- ✅ **多账号管理** — 保存多个学号，`cyber-lobster switch` 一键切换
-- ✅ **零配置双击** — 第一次运行引导式配置，之后双击即进监控
+- ✅ **多账号管理** — 保存多个学号，菜单 [2] 一键切换
 - ✅ **Windows 原生弹窗** — 重连成功时桌面通知提醒
-- ✅ **开机自启** — `cyber-lobster autostart` 一键设置
+- ✅ **开机自启** — 菜单 [0] 一键设置（Windows）/ Linux crontab 提示
 - ✅ **单文件 EXE** — 基于 PyInstaller 打包，无需 Python 环境
 - ✅ **隐私安全** — 配置仅存家目录 `~/.cyber_lobster_config.json`，权限 600
 
@@ -37,15 +37,23 @@ ePortal 校园网认证 · 断网自动重连 · 多账号管理 · 开机自启
 从 [Releases](https://github.com/mi179/hubt-inetnet-connet/releases) 下载 `cyber-lobster.exe`，双击运行。
 
 ```
-第一次： 自动进入配置向导 → 选运营商 → 输学号密码 → 开始监控
-以后：   双击 → 直接进入监控
+        🦞  cyber-lobster  v0.1.0  —  赛博龙虾守护者
+
+  📡 网络状态:  ✅ 外网连通
+  👤 当前账号:  （无 — 请先添加账号）
+
+     [1]  🚀  一键连网并进入守护挂机模式
+     [2]  🔄  切换当前账号
+     [3]  ➕  添加新账号
+     [4]  🔌  注销下线
+     [0]  ❌  退出程序
 ```
 
-EXE 同时支持命令行参数（在终端/cmd 中运行）：
+EXE 也支持命令行参数（在终端/cmd 中运行）：
 
 ```cmd
-cyber-lobster.exe setup          # 配置向导
 cyber-lobster.exe watch          # 启动监控
+cyber-lobster.exe setup          # 配置向导
 cyber-lobster.exe switch         # 切换账号
 cyber-lobster.exe logout         # 注销下线
 cyber-lobster.exe autostart      # 设置开机自启
