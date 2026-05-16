@@ -60,7 +60,7 @@ def run_setup_wizard() -> AccountConfig | None:
     while not user_id:
         user_id = input("  学号不能为空: ").strip()
 
-    password = getpass.getpass("  密码: ")
+    password = getpass.getpass("  密码（输入时不显示，正常敲回车即可）: ")
     while not password:
         password = getpass.getpass("  密码不能为空: ")
 

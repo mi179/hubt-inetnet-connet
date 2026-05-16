@@ -137,7 +137,7 @@ def cmd_setup(args: argparse.Namespace) -> int:
         print("  输入无效，请选 1/2/3")
 
     user_id = _prompt_nonempty("学号")
-    password = getpass.getpass("  密码: ")
+    password = getpass.getpass("  密码（输入时不显示，正常敲回车即可）: ")
     while not password:
         password = getpass.getpass("  密码不能为空: ")
     host = input(f"  认证服务器 [{DEFAULT_HOST}]: ").strip() or DEFAULT_HOST
