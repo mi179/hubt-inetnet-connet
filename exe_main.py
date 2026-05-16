@@ -218,54 +218,25 @@ def run_watch_loop(cfg: GlobalConfig) -> int:
 
 # ── 外观系统 2.0：内置皮肤库 ──
 
-BUILTIN_SKINS: dict[str, str] = {
-    "HUBT 专属版": r""" ██╗  ██╗██╗   ██╗██████╗ ████████╗
- ██║  ██║██║   ██║██╔══██╗╚══██╔══╝
- ███████║██║   ██║██████╔╝   ██║   
- ██╔══██║██║   ██║██╔══██╗   ██║   
- ██║  ██║╚██████╔╝██████╔╝   ██║   
- ╚═╝  ╚═╝ ╚═════╝ ╚═════╝    ╚═╝   
-       🦞 Cyber-Lobster v{version} 🦞""",
+# ── 唯一极客 Logo ──
 
-    "颜文字老婆": r"""   (\_/)
-  ( •_•)  < 主人，今天的网络也交给我吧！
-  / >🦞""",
+LOGO = r"""
+██████╗ ██╗   ██╗██████╗ ███████╗██████╗
+██╔════╝╚██╗ ██╔╝██╔══██╗██╔════╝██╔══██╗
+██║      ╚████╔╝ ██████╔╝█████╗  ██████╔╝
+██║       ╚██╔╝  ██╔══██╗██╔══╝  ██╔══██╗
+╚██████╗   ██║   ██████╔╝███████╗██║  ██║
+ ╚═════╝   ╚═╝   ╚═════╝ ╚══════╝╚═╝  ╚═╝
+██╗      ██████╗ ██████╗ ███████╗████████╗███████╗██████╗
+██║     ██╔═══██╗██╔══██╗██╔════╝╚══██╔══╝██╔════╝██╔══██╗
+██║     ██║   ██║██████╔╝███████╗   ██║   █████╗  ██████╔╝
+██║     ██║   ██║██╔══██╗╚════██║   ██║   ██╔══╝  ██╔══██╗
+███████╗╚██████╔╝██████╔╝███████║   ██║   ███████╗██║  ██║
+╚══════╝ ╚═════╝ ╚═════╝ ╚══════╝   ╚═╝   ╚══════╝╚═╝  ╚═╝
 
-    "机甲龙虾": r"""     / \      / \ 
-    (   )____(   )
-     \  /    \  / 
-      \|  🦞  |/  
-       |      |   
-       \______/   
-  [ CYBER LOBSTER SYSTEM ONLINE ]""",
-
-    "初音未来": r"""      oﾟ*｡o
-     /⌒＼_） < Master，初音已接管网络模块喵~
-    /　 　/
-    |　　/
-    ＼_/) 
-  [ HATSUNE MIKU CYBER-LINK ]""",
-
-    "黑客帝国": r"""  01001011 01001111
-  >> WAKE UP, LOBSTER...
-  >> THE MATRIX HAS YOU.""",
-}
-
-
-def get_all_skins(cfg: GlobalConfig) -> dict[str, str]:
-    """合并内置皮肤 + 用户自定义皮肤。"""
-    skins = dict(BUILTIN_SKINS)
-    if cfg.custom_skins:
-        skins.update(cfg.custom_skins)
-    return skins
-
-
-def pick_skin(cfg: GlobalConfig) -> str:
-    """根据配置选择要显示的皮肤 ASCII。"""
-    all_skins = get_all_skins(cfg)
-    if cfg.current_skin == "random" or cfg.current_skin not in all_skins:
-        return random.choice(list(all_skins.values()))
-    return all_skins[cfg.current_skin]
+ ✦ HUBT Network Guardian · 7x24 Zero Drop ✦
+╔════════════════════════════════════════════════════════════╗
+"""
 
 
 def _clear_screen() -> None:
@@ -285,46 +256,36 @@ def _check_online_status() -> tuple[bool, str]:
     return (False, "❌ 外网断开")
 
 
-def show_menu(cfg: GlobalConfig) -> int:
-    """交互式主菜单（无论有没有配置都显示）。"""
+def _render_menu(cfg: GlobalConfig) -> None:
+    """打印主菜单（Logo + 状态 + 选项）。"""
+    online, status_text = _check_online_status()
     current = cfg.get_current_account()
-    # 根据 config 选择皮肤
-    current_skin_content = pick_skin(cfg)
+    if current:
+        svc = SERVICE_NAMES.get(current.service, current.service)
+        acct_line = f"{current.user_id} ({svc})"
+    else:
+        acct_line = "（无 — 请先添加账号）"
 
+    print(LOGO)
+    print(f"  📡  {status_text}    👤  {acct_line}")
+    print()
+    print("  [1] 🚀 启动守护模式 (Watch)")
+    print("  [2] 🔄 切换网络账号")
+    print("  [3] ➕ 添加新的账号")
+    print("  [4] 🔌 执行安全下线")
+    print("  [0] ❌ 退出终端")
+    print()
+
+
+def show_menu(cfg: GlobalConfig) -> int:
+    """交互式主菜单。"""
     while True:
         _clear_screen()
-
-        # ── Logo（根据配置选择皮肤）──
-        print(current_skin_content.format(version=__version__))
-        print()
-
-        # ── 状态栏 ──
-        online, status_text = _check_online_status()
-        if current:
-            svc = SERVICE_NAMES.get(current.service, current.service)
-            print(f"  📡 网络状态:  {status_text}")
-            print(f"  👤 当前账号:  {current.user_id} ({svc})")
-        else:
-            print(f"  📡 网络状态:  {status_text}")
-            print(f"  👤 当前账号:  （无 — 请先添加账号）")
-        print(f"  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        print()
-
-        # ── 菜单选项 ──
-        print(f"     [1]  🚀  一键连网并进入守护挂机模式")
-        print(f"     [2]  🔄  切换当前账号")
-        print(f"     [3]  ➕  添加新账号")
-        print(f"     [4]  🔌  注销下线")
-        print(f"     [5]  🎲  切换界面皮肤")
-        print(f"     [6]  ⚙️  开机自启设置")
-        print(f"     [0]  ❌  退出程序")
-        print()
-        print(f"  ───────────────────────────────────")
-        print()
+        _render_menu(cfg)
 
         choice = input(f"  请输入选项 [1]: ").strip()
 
-        # ── 1. 一键连网 + 守护挂机 ──
+        # ── 1. 启动守护模式 ──
         if not choice or choice == "1":
             if not current:
                 warn("没有可用账号，请先 [3] 添加新账号")
@@ -457,194 +418,16 @@ def show_menu(cfg: GlobalConfig) -> int:
             input("  按 Enter 返回菜单...")
             continue
 
-        # ── 5. 皮肤外观管理子菜单 ──
-        elif choice == "5":
-            while True:
-                _clear_screen()
-                all_skins = get_all_skins(cfg)
-                mode = "🎲 随机盲盒" if cfg.current_skin == "random" else f"📌 {cfg.current_skin}"
-                print()
-                print("  ╔══════════════════════════════╗")
-                print("  ║   🎨 皮肤外观管理            ║")
-                print(f"  ║   当前模式: {mode:<18s}║")
-                print("  ╚══════════════════════════════╝")
-                print()
-                print(f"     [1] 📝 选择固定皮肤")
-                print(f"     [2] 🎲 开启随机盲盒模式")
-                print(f"     [3] ➕ 导入自定义皮肤")
-                print(f"     [0] ↩  返回主菜单")
-                print()
-                s = input("  请选择: ").strip()
-
-                if s == "1":
-                    # 列出所有可用皮肤
-                    names = list(all_skins.keys())
-                    print()
-                    print("  可选皮肤：")
-                    for i, name in enumerate(names, 1):
-                        mark = " ← 当前" if name == cfg.current_skin else ""
-                        print(f"    {i}. {name}{mark}")
-                    print("    0. 返回")
-                    print()
-                    c = input(f"  选择 (1-{len(names)}): ").strip()
-                    if c == "0" or not c:
-                        continue
-                    try:
-                        idx = int(c) - 1
-                        if 0 <= idx < len(names):
-                            cfg.current_skin = names[idx]
-                            save_config(cfg)
-                            current_skin_content = pick_skin(cfg)
-                            success(f"已固定皮肤: {names[idx]}")
-                        else:
-                            warn("序号无效")
-                    except (ValueError, IndexError):
-                        warn("输入无效")
-                    input("  按 Enter 继续...")
-
-                elif s == "2":
-                    cfg.current_skin = "random"
-                    save_config(cfg)
-                    current_skin_content = pick_skin(cfg)
-                    success("已切换为随机盲盒模式 🎲")
-                    input("  按 Enter 继续...")
-
-                elif s == "3":
-                    print()
-                    name = input("  给皮肤起个名字: ").strip()
-                    if not name:
-                        warn("名字不能为空")
-                        input("  按 Enter 继续...")
-                        continue
-                    if name in BUILTIN_SKINS:
-                        warn(f"「{name}」是内置皮肤名，请换个名字")
-                        input("  按 Enter 继续...")
-                        continue
-                    print("  粘贴 ASCII 图案，输入完成后在新行输入 EOF 结束：")
-                    print("  ── 开始粘贴 ──")
-                    lines = []
-                    try:
-                        while True:
-                            line = input()
-                            if line.strip() == "EOF":
-                                break
-                            lines.append(line)
-                    except (EOFError, KeyboardInterrupt):
-                        pass
-                    if lines:
-                        cfg.custom_skins[name] = "\n".join(lines)
-                        save_config(cfg)
-                        success(f"自定义皮肤「{name}」已保存！")
-                    input("  按 Enter 继续...")
-
-                elif s == "0":
-                    break
-                else:
-                    warn("输入无效")
-                    continue
-            continue
-
-        # ── 6. 开机自启设置 ──
-        elif choice == "6":
-            while True:
-                _clear_screen()
-                print()
-                print("  ╔══════════════════════════════╗")
-                print("  ║    ⚙️  开机自启设置          ║")
-                print("  ╚══════════════════════════════╝")
-                print()
-
-                # 状态总览
-                auto_auth_st = "🟢 开启" if cfg.auto_auth else "🔴 关闭"
-                auto_start_st = "🟢 已启" if cfg.auto_start else "🔴 关闭"
-                start_acct = cfg.auto_start_id or "（未设置）"
-
-                print(f"    1.  自动认证        {auto_auth_st}")
-                print(f"    2.  Windows 开机自启 {auto_start_st}")
-                print(f"    3.  开机启动账号    {start_acct}")
-                print(f"    0.  ↩ 返回主菜单")
-                print()
-                s = input("  请选择: ").strip()
-
-                if s == "1":
-                    cfg.auto_auth = not cfg.auto_auth
-                    save_config(cfg)
-                    success(f"自动认证已{'开启' if cfg.auto_auth else '关闭'}")
-                    input("  按 Enter 继续...")
-
-                elif s == "2":
-                    if sys.platform == "win32":
-                        if not cfg.auto_start:
-                            from cyber_lobster.cli import _setup_autostart_windows
-                            ok = _setup_autostart_windows()
-                            if ok == 0:
-                                cfg.auto_start = True
-                                save_config(cfg)
-                                success("开机自启已开启 ✅")
-                        else:
-                            import subprocess as _sp
-                            startup_dir = Path(os.environ.get('APPDATA', '')) / 'Microsoft' / 'Windows' / 'Start Menu' / 'Programs' / 'Startup'
-                            bat = startup_dir / 'cyber-lobster.bat'
-                            if bat.exists():
-                                bat.unlink()
-                            # 同时移除已创建的快捷方式
-                            cfg.auto_start = False
-                            save_config(cfg)
-                            success("开机自启已关闭 ✅ (已删除启动脚本)")
-                    else:
-                        from cyber_lobster.cli import _setup_autostart_linux
-                        _setup_autostart_linux()
-                    input("  按 Enter 继续...")
-
-                elif s == "3":
-                    ids = cfg.account_ids()
-                    if not ids:
-                        warn("没有已保存的账号，请先添加")
-                        input("  按 Enter 继续...")
-                        continue
-                    print()
-                    print("  选择开机时自动启动的账号：")
-                    for i, uid in enumerate(ids, 1):
-                        mark = " ← 当前" if uid == cfg.auto_start_id else ""
-                        print(f"    {i}. {uid}{mark}")
-                    print("    0.  不自动启动")
-                    print()
-                    c = input(f"  选择 (0-{len(ids)}): ").strip()
-                    if c == "0":
-                        cfg.auto_start_id = ""
-                        cfg.auto_start = False
-                        save_config(cfg)
-                        success("已取消开机自动启动")
-                    else:
-                        try:
-                            idx = int(c) - 1
-                            if 0 <= idx < len(ids):
-                                cfg.auto_start_id = ids[idx]
-                                cfg.auto_start = True
-                                save_config(cfg)
-                                success(f"开机将自动启动账号: {ids[idx]}")
-                        except (ValueError, IndexError):
-                            warn("输入无效")
-                    input("  按 Enter 继续...")
-
-                elif s == "0":
-                    break
-                else:
-                    warn("输入无效")
-                    continue
-            continue
-
         # ── 0. 退出 ──
         elif choice == "0":
             _clear_screen()
             print()
-            print(f"  🦞  cyber-lobster v{__version__}")
-            print(f"  再见 👋  校园网一路畅通！")
+            print("  再见 👋  校园网一路畅通！")
             print()
             return 0
 
         else:
-            print("  输入无效，请选择 0-6")
+            print("  输入无效，请选择 0-4")
             input("  按 Enter 返回菜单...")
             continue
 
