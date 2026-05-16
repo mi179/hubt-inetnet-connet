@@ -11,6 +11,7 @@ import sys
 import time
 import random
 import getpass
+from datetime import datetime
 from pathlib import Path
 
 from cyber_lobster import __version__
@@ -29,6 +30,12 @@ from cyber_lobster.network_login import (
     DEFAULT_HOST,
 )
 from cyber_lobster.network import check_connectivity
+
+
+def _ts() -> str:
+    """返回当前时间戳字符串 [YYYY-MM-DD HH:mm:ss]"""
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
 
 # ── 常量 ──
 WATCH_INTERVAL = 10
