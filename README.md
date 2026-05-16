@@ -1,122 +1,205 @@
+<div align="center">
+
 # 🦞 cyber-lobster
 
-> Homelab 网络与服务器运维 CLI 工具
+**校园网自动重连工具 · 赛博龙虾守护者**
 
-`cyber-lobster` 是一个纯标准库实现的 Python CLI 工具，专为个人 Homelab 环境设计，用于快速检查 Linux 系统的运行状态及网络连通性。
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue)](https://python.org)
+[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux-lightgrey)]()
+
+ePortal 校园网认证 · 断网自动重连 · 多账号管理 · 开机自启 · 单文件 EXE
+
+</div>
 
 ---
 
-## 快速开始
+## 📖 简介
+
+`cyber-lobster` 是一个纯 Python 实现的校园网自动重连工具，专为 ePortal 认证系统设计。它运行在后台，每隔 10 秒检测一次外网连通性，一旦发现断网立即自动重新认证，让 NAS、工控机、软路由等设备保持永久在线。
+
+### ✨ 特性
+
+- ✅ **自动重连** — 检测到断网后自动 RSA 加密登录，无需人工干预
+- ✅ **多账号管理** — 保存多个学号，`cyber-lobster switch` 一键切换
+- ✅ **零配置双击** — 第一次运行引导式配置，之后双击即进监控
+- ✅ **Windows 原生弹窗** — 重连成功时桌面通知提醒
+- ✅ **开机自启** — `cyber-lobster autostart` 一键设置
+- ✅ **单文件 EXE** — 基于 PyInstaller 打包，无需 Python 环境
+- ✅ **隐私安全** — 配置仅存家目录 `~/.cyber_lobster_config.json`，权限 600
+
+---
+
+## 🚀 快速开始
+
+### 方式一：Windows 用户（推荐）
+
+从 [Releases](https://github.com/mi179/hubt-inetnet-connet/releases) 下载 `cyber-lobster.exe`，双击运行。
+
+```
+第一次： 自动进入配置向导 → 选运营商 → 输学号密码 → 开始监控
+以后：   双击 → 直接进入监控
+```
+
+### 方式二：从源码运行
 
 ```bash
-# 1. 安装（开发模式）
+# 1. 克隆
+git clone https://github.com/mi179/hubt-inetnet-connet.git
+cd cyber-lobster
+
+# 2. 安装
+python3 -m venv .venv
+source .venv/bin/activate   # Linux
+# 或 .venv\Scripts\activate  # Windows
 pip install -e .
 
-# 2. 配置网关地址（可选，默认三个示例地址）
-cp config.json.example config.json
-# 编辑 config.json，填入你家网关/旁路由的 IP
-
 # 3. 运行
-cyber-lobster check
+cyber-lobster setup          # 首次配置
+cyber-lobster watch          # 启动监控
+```
+
+### 方式三：打包成 EXE
+
+```bash
+pip install pyinstaller
+python build.py
+# 输出: dist/cyber-lobster.exe
 ```
 
 ---
 
-## 使用方法
+## 📋 命令参考
 
-### 查看系统状态
+| 命令 | 说明 |
+|------|------|
+| `cyber-lobster setup` | 交互式配置向导（添加/修改账号） |
+| `cyber-lobster switch` | 切换当前默认账号 |
+| `cyber-lobster watch` | 断网自动重连监控守护模式 |
+| `cyber-lobster login --current` | 手动执行一次登录 |
+| `cyber-lobster logout` | 发送 ePortal 注销请求 |
+| `cyber-lobster autostart` | 设置开机自启 |
+| `cyber-lobster status` | 查看系统状态（CPU / 内存） |
+| `cyber-lobster ping` | Ping 检测网关 |
+| `cyber-lobster check` | 一键全检（status + ping） |
 
-```bash
-cyber-lobster status
-```
-
-输出 CPU 封装温度、内存使用量。加 `--all-sensors` 可查看所有 thermal 传感器。
-
-### Ping 检测网关
-
-```bash
-cyber-lobster ping
-```
-
-对 `config.json` 中配置的网关逐一发 Ping 包，显示通断、延迟和丢包率。  
-也可直接测试不在配置文件里的目标：
+### watch 参数
 
 ```bash
-cyber-lobster ping --help   # 目前只检测已配网关，后期会支持 --host 参数
-```
-
-### 一键全检
-
-```bash
-cyber-lobster check
-```
-
-等价于 `status` + `ping` 一起跑，适合日常巡检。
-
----
-
-## 配置文件
-
-查找优先级（先到先用）：
-
-1. 命令行 `--config /path/to/config.json`
-2. 当前目录 `./config.json`
-3. `~/.config/cyber-lobster/config.json`
-
-参考 `config.json.example`：
-
-```json
-{
-  "gateways": ["192.168.1.1", "10.0.0.1", "1.1.1.1"],
-  "ping_count": 3,
-  "ping_timeout": 5
-}
+cyber-lobster watch --interval 5 --timeout 2
+# --interval  检测间隔秒数（默认 10）
+# --timeout   检测超时秒数（默认 3）
 ```
 
 ---
 
-## 目录结构
+## 🏗️ 项目结构
 
 ```
 cyber-lobster/
-├── README.md                   ← 本文件
-├── pyproject.toml              ← 项目元数据
-├── config.json.example         ← 网关配置示例
-├── src/
-│   └── cyber_lobster/
-│       ├── __init__.py         ← 包版本信息
-│       ├── __main__.py         ← python -m 入口
-│       ├── cli.py              ← argparse 命令行框架
-│       ├── config.py           ← 配置文件加载
-│       ├── system.py           ← CPU 温度 / 内存检测
-│       └── network.py          ← Ping 连通性检测
-└── tests/
-    ├── __init__.py
-    └── test_system.py          ← 基础单元测试
+├── exe_main.py                 # EXE 双击入口（无脑自动流）
+├── build.py                    # PyInstaller 打包脚本
+├── pyproject.toml              # 项目元数据
+├── src/cyber_lobster/
+│   ├── cli.py                  #  CLI 框架（9 个子命令）
+│   ├── config.py               #  多账号配置文件管理
+│   ├── logger.py               #  时间戳日志 + Windows 弹窗
+│   ├── network.py              #  Ping / HTTP 连通性检测
+│   ├── network_login.py        #  ePortal 登录 + RSA 加密 + 注销
+│   └── system.py               #  CPU 温度 / 内存检测
+└── tests/                      #  单元测试
 ```
 
 ---
 
-## 设计原则
+## 🔧 技术栈
 
-- **标准库为主** — 零外部依赖，`pip install` 即用
-- **仅限 Linux** — 通过 `/sys/class/thermal` 和 `/proc/meminfo` 读取数据
-- **CLI 优先** — 纯命令行交互，适合 SSH 连入 NAS / 工控机 / 软路由后一键巡检
-- **简单可靠** — 每个文件职责清晰，方便按需魔改
+| 模块 | 用途 |
+|------|------|
+| `argparse` | CLI 命令行框架 |
+| `requests` | HTTP 请求 + Session 管理 |
+| `RSA-1024` | 客户端密码加密（反转 → 模幂） |
+| `ctypes` | Windows 原生弹窗通知 |
+| `pathlib` | 跨平台路径处理 |
 
----
-
-## 路线图（初步想法）
-
-- [ ] 支持 `--host` 参数临时指定 Ping 目标
-- [ ] 持续运行模式（`watch`），每隔 N 秒刷新
-- [ ] 磁盘使用 / 进程统计 / 系统负载
-- [ ] 通知推送（如检测到离线发 Telegram / Discord 消息）
-- [ ] Docker 容器状态检测
-- [ ] 彩色输出（ANSI escape codes）
+**核心依赖：仅 `requests` 🎉**
 
 ---
 
-## License
+## 🪟 Windows 弹窗效果
 
-MIT
+断网重连成功时自动弹出：
+
+```
+┌──────────────────────────────────┐
+│  🦞 赛博龙虾守护者               │
+│                                  │
+│  校园网已自动重新连通！           │
+│                                  │
+│            [确定]                 │
+└──────────────────────────────────┘
+```
+
+---
+
+## 🏠 配置文件
+
+路径：`~/.cyber_lobster_config.json`
+
+```json
+{
+  "current_user_id": "20240000000",
+  "accounts": {
+    "20240000000": {
+      "password": "...",
+      "service": "DX",
+      "host": "172.16.54.18",
+      "query_string": ""
+    }
+  }
+}
+```
+
+> `password` 存明文（登录时自动 RSA 加密），文件权限 600 仅当前用户可读。
+
+---
+
+## 🔄 工作流程
+
+```
+┌─────────────┐     ┌──────────────┐     ┌───────────────┐
+│  双击 EXE    │────→│  有配置文件?   │────→│  watch 监控模式 │
+└─────────────┘     └──────┬───────┘     └───────┬───────┘
+                           │ 无                   │ 每 10s 检测
+                           ▼                      ▼
+                    ┌──────────────┐     ┌───────────────┐
+                    │  setup 向导   │     │  连通性检测     │
+                    │  选运营商     │     │  HTTP GET      │
+                    │  输学号密码   │     │  223.5.5.5     │
+                    │  验证登录     │     └───────┬───────┘
+                    │  保存配置     │            │ 断连
+                    └──────┬───────┘     ┌───────▼───────┐
+                           │             │  自动 RSA 登录  │
+                           ▼             │  Windows 弹窗   │
+                    ┌──────────────┐     └───────┬───────┘
+                    │  watch 监控   │◄────────────┘
+                    └──────────────┘     成功 → 继续监控
+```
+
+---
+
+## 🤝 贡献
+
+欢迎提交 Issue 和 Pull Request！
+
+---
+
+## 📄 License
+
+[MIT](LICENSE)
+
+---
+
+<div align="center">
+  Built with ❤️ for homelab enthusiasts
+</div>
