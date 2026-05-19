@@ -373,6 +373,13 @@ https://github.com/mi179/hubt-inetnet-connet/actions
 
 ## 📋 更新日志
 
+### v0.8.1 (2026-05-19)
+- 🔧 修复重构导致的菜单 NameError 崩溃（`current`/`online` 未定义）
+- 🔧 修复选项 [1] 未调用 `run_watch_loop` 无法进入监控模式
+- 🔧 Linux 终端 raw 模式支持 — B/Q 单键返回/退出生效
+- 🔧 提示文案统一: `B 返回 | Q 退出 | Ctrl+C 返回菜单`
+- 📖 README 清理残留皮肤行 + 同步实际行为
+
 ### v0.8.0 (2026-05-17)
 - 🎨 全新极客硬核 Logo（ANSI Shadow 块状字体）
 - 🔧 精简菜单至 5 项，移除皮肤/设置子菜单
