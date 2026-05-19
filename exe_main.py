@@ -9,7 +9,7 @@ cyber-lobster EXE 入口 —— 双击即用的校园网自动重连工具。
 
 import sys
 import time
-import random
+
 import getpass
 from datetime import datetime
 from pathlib import Path
@@ -104,7 +104,7 @@ def run_setup_wizard() -> AccountConfig | None:
 
 
 def run_watch_loop(cfg: GlobalConfig) -> int:
-    """断网自动重连监控 — 实时状态 + Ctrl+B返回/Ctrl+Q退出。"""
+    """断网自动重连监控 — 实时状态 + B返回/Q退出/Ctrl+C返回。"""
     account = cfg.get_current_account()
     if not account:
         error("配置中没有有效账号，请运行 cyber-lobster setup")
@@ -116,13 +116,9 @@ def run_watch_loop(cfg: GlobalConfig) -> int:
     print(f"  🦞  cyber-lobster v{__version__}  —  守护监控模式")
     print(f"  ═══════════════════════════════════════════")
     print(f"  👤 账号: {account.user_id} ({svc})")
-
-    # 状态栏
-    status_icon = "⏳"
-    status_text = "首次检测..."
-    print(f"  📡 状态: {status_icon} {status_text}")
+    print(f"  📡 状态: ⏳ 首次检测...")
     print(f"  ───────────────────────────────────────────")
-    print(f"  [ Ctrl+B 返回菜单 | Ctrl+Q 退出程序 ]")
+    print(f"  [ B 返回菜单 | Q 退出程序 | Ctrl+C 返回菜单 ]")
     print()
 
     fail_count = 0
@@ -135,6 +131,18 @@ def run_watch_loop(cfg: GlobalConfig) -> int:
     )
 
     import sys as _sys
+
+    # Linux: 设置终端为 raw 模式以获取单次按键
+    _old_termios = None
+    if _sys.platform != "win32":
+        try:
+            import termios as _termios
+            import tty as _tty
+            _old_termios = _termios.tcgetattr(_sys.stdin.fileno())
+            _tty.setraw(_sys.stdin.fileno())
+        except Exception:
+            pass
+
     try:
         while True:
             try:
@@ -142,7 +150,6 @@ def run_watch_loop(cfg: GlobalConfig) -> int:
             except Exception:
                 online = False
 
-            # 更新状态行（使用 ANSI 光标控制回到行首覆盖）
             if online:
                 if fail_count > 0:
                     msg = f"✅ 网络已恢复（之前断连 {fail_count} 次，共重连 {reconnect_count} 次）"
@@ -150,7 +157,6 @@ def run_watch_loop(cfg: GlobalConfig) -> int:
                     fail_count = 0
                 else:
                     msg = "✅ 网络正常"
-                # 覆盖状态行
                 print(f"\r  📡 状态: ✅ 在线 | {_ts()} | {msg}", end="", flush=True)
             else:
                 fail_count += 1
@@ -174,7 +180,7 @@ def run_watch_loop(cfg: GlobalConfig) -> int:
                     msg = f"❌ 异常: {type(exc).__name__}"
                 print(f"\r  📡 状态: {'✅ 在线' if fail_count == 0 else '❌ 断连'} | {_ts()} | {msg:<50s}", end="", flush=True)
 
-            # 分秒等待 + 检测键盘（按 B 返回菜单，按 Q 退出）
+            # 分秒等待 + 检测键盘
             for _ in range(WATCH_INTERVAL):
                 time.sleep(1)
                 try:
@@ -188,8 +194,12 @@ def run_watch_loop(cfg: GlobalConfig) -> int:
                                 return 0
                             elif k == "q":
                                 print("\n")
-                                info("再见 👋")
+                                info("再见")
                                 _sys.exit(0)
+                            elif k == "\x03":  # Ctrl+C
+                                print("\n")
+                                info("返回主菜单")
+                                return 0
                     else:
                         import select as _sel
                         if _sel.select([_sys.stdin], [], [], 0)[0]:
@@ -200,8 +210,12 @@ def run_watch_loop(cfg: GlobalConfig) -> int:
                                 return 0
                             elif k == "q":
                                 print("\n")
-                                info("再见 👋")
+                                info("再见")
                                 _sys.exit(0)
+                            elif k == "\x03":  # Ctrl+C
+                                print("\n")
+                                info("返回主菜单")
+                                return 0
                 except Exception:
                     pass
 
@@ -214,6 +228,14 @@ def run_watch_loop(cfg: GlobalConfig) -> int:
         error(f"意外错误: {type(exc).__name__}: {exc}")
         input("  按 Enter 返回主菜单...")
         return 1
+    finally:
+        # 恢复终端设置
+        if _old_termios is not None:
+            try:
+                import termios as _termios
+                _termios.tcsetattr(_sys.stdin.fileno(), _termios.TCSADRAIN, _old_termios)
+            except Exception:
+                pass
 
 
 # ── 外观系统 2.0：内置皮肤库 ──
@@ -256,8 +278,8 @@ def _check_online_status() -> tuple[bool, str]:
     return (False, "❌ 外网断开")
 
 
-def _render_menu(cfg: GlobalConfig) -> None:
-    """打印主菜单（Logo + 状态 + 选项）。"""
+def _render_menu(cfg: GlobalConfig) -> tuple[object, bool]:
+    """打印主菜单（Logo + 状态 + 选项），返回 (current_account, is_online)。"""
     online, status_text = _check_online_status()
     current = cfg.get_current_account()
     if current:
@@ -275,13 +297,14 @@ def _render_menu(cfg: GlobalConfig) -> None:
     print("  [4] 🔌 执行安全下线")
     print("  [0] ❌ 退出终端")
     print()
+    return current, online
 
 
 def show_menu(cfg: GlobalConfig) -> int:
     """交互式主菜单。"""
     while True:
         _clear_screen()
-        _render_menu(cfg)
+        current, online = _render_menu(cfg)
 
         choice = input(f"  请输入选项 [1]: ").strip()
 
@@ -318,8 +341,8 @@ def show_menu(cfg: GlobalConfig) -> int:
             else:
                 info("网络已连通，直接进入守护模式")
 
-            # 监控模式返回后直接刷新菜单（Ctrl+C / B 键都不用额外回车）
-            print()
+            run_watch_loop(cfg)
+            # 监控模式返回后直接刷新菜单
             continue
 
         # ── 2. 切换账号（先下线旧号 → 切换配置 → 上线新号）──
